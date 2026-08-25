@@ -108,8 +108,12 @@ describe("similarity", () => {
 
   it("returns high similarity for homoglyph lookalikes", () => {
     // Production normalizes before comparing — mirror that here.
-    expect(similarity(normalizeDomainLabel("paypa1"), normalizeDomainLabel("paypal"))).toBe(1);
-    expect(similarity(normalizeDomainLabel("g00gle"), normalizeDomainLabel("google"))).toBe(1);
+    expect(
+      similarity(normalizeDomainLabel("paypa1"), normalizeDomainLabel("paypal")),
+    ).toBe(1);
+    expect(
+      similarity(normalizeDomainLabel("g00gle"), normalizeDomainLabel("google")),
+    ).toBe(1);
   });
 
   it("returns low similarity for unrelated strings", () => {

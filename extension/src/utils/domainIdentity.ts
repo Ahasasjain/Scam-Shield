@@ -27,12 +27,25 @@ export const BRANDS: readonly BrandDefinition[] = [
   {
     id: "google",
     names: ["google", "gogle", "googel"],
-    officialDomains: ["google.com", "google.co.in", "google.co.uk", "google.de", "youtube.com", "gmail.com"],
+    officialDomains: [
+      "google.com",
+      "google.co.in",
+      "google.co.uk",
+      "google.de",
+      "youtube.com",
+      "gmail.com",
+    ],
   },
   {
     id: "facebook",
     names: ["facebook", "facebok", "facbook"],
-    officialDomains: ["facebook.com", "fb.com", "instagram.com", "whatsapp.com", "meta.com"],
+    officialDomains: [
+      "facebook.com",
+      "fb.com",
+      "instagram.com",
+      "whatsapp.com",
+      "meta.com",
+    ],
   },
   {
     id: "paypal",
@@ -42,7 +55,14 @@ export const BRANDS: readonly BrandDefinition[] = [
   {
     id: "microsoft",
     names: ["microsoft", "micrsoft", "microsft"],
-    officialDomains: ["microsoft.com", "live.com", "office.com", "outlook.com", "bing.com", "linkedin.com"],
+    officialDomains: [
+      "microsoft.com",
+      "live.com",
+      "office.com",
+      "outlook.com",
+      "bing.com",
+      "linkedin.com",
+    ],
   },
   {
     id: "apple",
@@ -299,8 +319,7 @@ export function classifyDomain(hostname: string): DomainIdentity {
       ...base,
       detectedBrand: brand.id,
       matchedOfficialDomain: registrableDomain,
-      relationship:
-        registrableDomain === lower ? "official" : "trusted-subdomain",
+      relationship: registrableDomain === lower ? "official" : "trusted-subdomain",
     };
   }
 

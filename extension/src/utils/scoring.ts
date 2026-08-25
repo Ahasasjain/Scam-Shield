@@ -66,8 +66,7 @@ export function evaluateCorrelations(
   const bonuses: RiskFactor[] = [];
   const ids = new Set(factors.map((f) => f.id));
 
-  const hasCredentialForm =
-    ids.has("page-login-form") || ids.has("page-payment-form");
+  const hasCredentialForm = ids.has("page-login-form") || ids.has("page-payment-form");
   const hasUrgency = ids.has("page-urgency-language");
   const hasFakeWarning = ids.has("page-fake-warnings");
   const hasGiveaway = ids.has("page-giveaway-patterns");
@@ -122,7 +121,12 @@ export function evaluateCorrelations(
   }
 
   // §13 moderate: unknown domain + credential form + urgency
-  if (!strongImpersonation && isUnrelatedOrWorse && hasCredentialForm && (hasUrgency || hasGiveaway)) {
+  if (
+    !strongImpersonation &&
+    isUnrelatedOrWorse &&
+    hasCredentialForm &&
+    (hasUrgency || hasGiveaway)
+  ) {
     bonuses.push({
       id: "corr-unknown-credentials-pressure",
       title: "Unknown domain requesting credentials under pressure",
@@ -165,7 +169,10 @@ export function calculateScore(
   aiFactors: RiskFactor[] = [],
   correlationInput: CorrelationInput = {},
 ): ScoreResult {
-  const correlations = evaluateCorrelations([...ruleFactors, ...aiFactors], correlationInput);
+  const correlations = evaluateCorrelations(
+    [...ruleFactors, ...aiFactors],
+    correlationInput,
+  );
   const allFactors = [...ruleFactors, ...aiFactors, ...correlations];
 
   // Per-group raw sums.
@@ -178,7 +185,9 @@ export function calculateScore(
   // Apply caps per group.
   let totalRisk = 0;
   const breakdown: ScoreBreakdownEntry[] = [];
-  for (const [key, def] of Object.entries(EVIDENCE_GROUPS) as Array<[EvidenceGroupKey, (typeof EVIDENCE_GROUPS)[EvidenceGroupKey]]>) {
+  for (const [key, def] of Object.entries(EVIDENCE_GROUPS) as Array<
+    [EvidenceGroupKey, (typeof EVIDENCE_GROUPS)[EvidenceGroupKey]]
+  >) {
     const raw = groupSums.get(key) ?? 0;
     if (raw === 0) continue;
     const cappedValue = Math.min(raw, def.cap);

@@ -16,7 +16,9 @@ import {
  *   they do not suppress HTTPS/page/redirect findings.
  */
 
-function identityOf(context: { domainIdentity?: DomainIdentity }): DomainIdentity | null {
+function identityOf(context: {
+  domainIdentity?: DomainIdentity;
+}): DomainIdentity | null {
   return context.domainIdentity ?? null;
 }
 
@@ -108,8 +110,7 @@ export const urlRules: DetectionRule[] = [
   {
     id: "url-encoded-chars",
     name: "URL encoding abuse",
-    description:
-      "Heavy percent-encoding can hide the real destination of a link.",
+    description: "Heavy percent-encoding can hide the real destination of a link.",
     severity: "low",
     points: 3,
     category: "url",

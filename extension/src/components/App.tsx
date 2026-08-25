@@ -188,15 +188,17 @@ export function App({
               </button>
             </div>
 
-            {autoWarning && riskLevel && (riskLevel === "high" || riskLevel === "critical") && (
-              <div
-                role="alert"
-                className="ss-animate-in rounded-xl border border-red-400 bg-red-100 p-3 text-sm font-semibold text-red-900 dark:border-red-700 dark:bg-red-950 dark:text-red-200"
-              >
-                ⚠️ Automatic scan flagged this website as {riskLevel} risk.
-                Review the findings below before entering any information.
-              </div>
-            )}
+            {autoWarning &&
+              riskLevel &&
+              (riskLevel === "high" || riskLevel === "critical") && (
+                <div
+                  role="alert"
+                  className="ss-animate-in rounded-xl border border-red-400 bg-red-100 p-3 text-sm font-semibold text-red-900 dark:border-red-700 dark:bg-red-950 dark:text-red-200"
+                >
+                  ⚠️ Automatic scan flagged this website as {riskLevel} risk. Review the
+                  findings below before entering any information.
+                </div>
+              )}
 
             {scanning && <ScanProgress step={progressStep} />}
 

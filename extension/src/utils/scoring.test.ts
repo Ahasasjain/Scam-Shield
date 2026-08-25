@@ -102,7 +102,9 @@ describe("evaluateCorrelations (§13)", () => {
         },
       },
     );
-    expect(bonuses.some((b) => b.id === "corr-unknown-credentials-pressure")).toBe(true);
+    expect(bonuses.some((b) => b.id === "corr-unknown-credentials-pressure")).toBe(
+      true,
+    );
   });
 
   it("suspicious TLD alone fires no correlation", () => {
@@ -116,13 +118,43 @@ describe("score bands remain correct (spec §13)", () => {
   it("maps deductions to the documented bands", () => {
     // Cross-group fixtures; totals computed AFTER per-group caps.
     // critical: brandImp 30 + page 26 + url 13 + transport 12 + redirects 6 = 87 → 13
-    expect(calculateScore([factor("url-lookalike-domain-strong", 30), factor("page-fake-warnings", 26), factor("url-suspicious-tld", 3), factor("url-hyphen-overload", 2), factor("url-encoded-chars", 3), factor("url-excessive-length", 2), factor("url-nested-subdomains", 3), factor("https-not-used", 12), factor("redirect-long-chain", 6)]).riskLevel).toBe("critical");
+    expect(
+      calculateScore([
+        factor("url-lookalike-domain-strong", 30),
+        factor("page-fake-warnings", 26),
+        factor("url-suspicious-tld", 3),
+        factor("url-hyphen-overload", 2),
+        factor("url-encoded-chars", 3),
+        factor("url-excessive-length", 2),
+        factor("url-nested-subdomains", 3),
+        factor("https-not-used", 12),
+        factor("redirect-long-chain", 6),
+      ]).riskLevel,
+    ).toBe("critical");
     // high: brandImp 24 + page 16 + url 8 + redirects 6 = 54 → 46
-    expect(calculateScore([factor("url-lookalike-domain", 24), factor("page-giveaway-patterns", 16), factor("url-encoded-chars", 3), factor("url-suspicious-tld", 3), factor("url-nested-subdomains", 2), factor("redirect-long-chain", 6)]).riskLevel).toBe("high");
+    expect(
+      calculateScore([
+        factor("url-lookalike-domain", 24),
+        factor("page-giveaway-patterns", 16),
+        factor("url-encoded-chars", 3),
+        factor("url-suspicious-tld", 3),
+        factor("url-nested-subdomains", 2),
+        factor("redirect-long-chain", 6),
+      ]).riskLevel,
+    ).toBe("high");
     // medium: transport 18 + page 10 + redirects 6 = 34 → 66
-    expect(calculateScore([factor("url-ip-host", 18), factor("page-urgency-language", 10), factor("redirect-long-chain", 6)]).riskLevel).toBe("medium");
+    expect(
+      calculateScore([
+        factor("url-ip-host", 18),
+        factor("page-urgency-language", 10),
+        factor("redirect-long-chain", 6),
+      ]).riskLevel,
+    ).toBe("medium");
     // low: transport 18 + page 5 = 23 → 77
-    expect(calculateScore([factor("url-ip-host", 18), factor("page-login-form", 5)]).riskLevel).toBe("low");
+    expect(
+      calculateScore([factor("url-ip-host", 18), factor("page-login-form", 5)])
+        .riskLevel,
+    ).toBe("low");
     // safe: transport 18 alone → 82
     expect(calculateScore([factor("url-ip-host", 18)]).riskLevel).toBe("safe");
   });
@@ -131,20 +163,20 @@ describe("score bands remain correct (spec §13)", () => {
     const result = calculateScore([
       // domainIdentity: n/a — no rules emit this group yet
       factor("url-lookalike-domain-strong", 30), // brandImpersonation: 30/35
-      factor("url-brand-in-subdomain", 22),      // brandImpersonation capped → 35
-      factor("url-ip-host", 18),                 // urlStructure raw 41 → cap 15
+      factor("url-brand-in-subdomain", 22), // brandImpersonation capped → 35
+      factor("url-ip-host", 18), // urlStructure raw 41 → cap 15
       factor("url-suspicious-tld", 3),
       factor("url-hyphen-overload", 2),
       factor("url-encoded-chars", 3),
       factor("url-excessive-length", 2),
       factor("url-nested-subdomains", 3),
       factor("url-punycode", 12),
-      factor("page-fake-warnings", 26),          // pageContent raw 57 → cap 30
+      factor("page-fake-warnings", 26), // pageContent raw 57 → cap 30
       factor("page-giveaway-patterns", 16),
       factor("page-payment-form", 5),
       factor("page-urgency-language", 10),
-      factor("https-not-used", 12),              // transport: 12/20
-      factor("redirect-long-chain", 6),          // redirects: 6/15
+      factor("https-not-used", 12), // transport: 12/20
+      factor("redirect-long-chain", 6), // redirects: 6/15
     ]);
     // Totals: 35 + 15 + 30 + 12 + 6 = 98 → score 2
     expect(result.score).toBeLessThanOrEqual(10);
