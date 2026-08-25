@@ -18,6 +18,14 @@ export interface CollectedPageSignals {
   giveawayPatterns: number;
   fakeSecurityWarnings: number;
   externalScriptOrigins: string[];
+  /** §22–§23: where credential/payment forms submit — cross-origin is the
+   * strongest generic phishing signal. Origins only, never field values. */
+  formActions: Array<{
+    actionOrigin: string | null;
+    isCrossOrigin: boolean;
+    containsPassword: boolean;
+    containsPaymentFields: boolean;
+  }>;
 }
 
 const URGENCY_PATTERNS = [
@@ -95,6 +103,41 @@ function collectSignals(): CollectedPageSignals {
     ),
   ).slice(0, 50);
 
+  // §22–§23: form-action origin analysis. Structural attributes only —
+  // never reads input values.
+  const pageOrigin = globalThis.location.origin;
+  const formActions: CollectedPageSignals["formActions"] = [];
+  for (const form of Array.from(document.querySelectorAll("form")).slice(0, 20)) {
+    const hasPassword = form.querySelector('input[type="password"]') !== null;
+    let containsPaymentFields = false;
+    for (const selector of PAYMENT_HINTS) {
+      if (form.querySelector(selector) !== null) {
+        containsPaymentFields = true;
+        break;
+      }
+    }
+    if (!hasPassword && !containsPaymentFields) continue;
+
+    let actionOrigin: string | null = null;
+    const rawAction = form.getAttribute("action");
+    if (rawAction) {
+      try {
+        actionOrigin = new URL(rawAction, globalThis.location.href).origin;
+      } catch {
+        actionOrigin = null;
+      }
+    } else {
+      actionOrigin = pageOrigin; // submits to current URL
+    }
+
+    formActions.push({
+      actionOrigin,
+      isCrossOrigin: actionOrigin !== null && actionOrigin !== pageOrigin,
+      containsPassword: hasPassword,
+      containsPaymentFields,
+    });
+  }
+
   return {
     hasLoginForm,
     hasPasswordFieldsOnHttp: !isHttps && hasLoginForm,
@@ -103,6 +146,7 @@ function collectSignals(): CollectedPageSignals {
     giveawayPatterns: countMatches(bodyText, GIVEAWAY_PATTERNS),
     fakeSecurityWarnings: countMatches(bodyText, FAKE_WARNING_PATTERNS),
     externalScriptOrigins,
+    formActions,
   };
 }
 

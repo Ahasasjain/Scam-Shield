@@ -19,6 +19,46 @@ export const contentRules: DetectionRule[] = [
     }),
   },
   {
+    id: "page-cross-origin-credentials",
+    name: "Credentials submit to a different website",
+    description:
+      "This page's password form sends data to a different domain than the one you are visiting — the hallmark of credential-harvesting phishing pages. Legitimate sites keep authentication on their own origin.",
+    severity: "critical",
+    points: 30,
+    category: "page",
+    evaluate: ({ pageSignals }) => {
+      const crossOrigin = (pageSignals?.formActions ?? []).find(
+        (f) => f.containsPassword && f.isCrossOrigin,
+      );
+      return {
+        matched: crossOrigin !== undefined,
+        explanation: crossOrigin
+          ? `Password form submits to ${crossOrigin.actionOrigin ?? "another origin"}.`
+          : undefined,
+      };
+    },
+  },
+  {
+    id: "page-payment-cross-origin",
+    name: "Payment details submit to a different website",
+    description:
+      "This page's payment form sends card data to a different domain than the one you are visiting.",
+    severity: "high",
+    points: 24,
+    category: "page",
+    evaluate: ({ pageSignals }) => {
+      const crossOrigin = (pageSignals?.formActions ?? []).find(
+        (f) => f.containsPaymentFields && f.isCrossOrigin && !f.containsPassword,
+      );
+      return {
+        matched: crossOrigin !== undefined,
+        explanation: crossOrigin
+          ? `Payment form submits to ${crossOrigin.actionOrigin ?? "another origin"}.`
+          : undefined,
+      };
+    },
+  },
+  {
     id: "page-payment-form",
     name: "Payment form detected",
     description:

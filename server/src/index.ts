@@ -3,6 +3,7 @@ import express from "express";
 import helmet from "helmet";
 import { createAnalyzeRouter } from "./routes/analyze.js";
 import { createHealthRouter } from "./routes/health.js";
+import { createThreatLookupRouter } from "./routes/threatLookup.js";
 import { createRateLimiter } from "./middleware/rateLimit.js";
 import { createOriginCheck } from "./middleware/originCheck.js";
 import { errorHandler, notFoundHandler } from "./middleware/errorHandler.js";
@@ -62,6 +63,7 @@ function createApp(env: Env): express.Express {
   });
 
   app.use(createHealthRouter());
+  app.use(createThreatLookupRouter());
   app.use(createAnalyzeRouter(analyzer));
   app.use(notFoundHandler);
   app.use(errorHandler);

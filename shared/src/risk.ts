@@ -46,3 +46,55 @@ export const RISK_LEVEL_LABELS: Record<RiskLevel, string> = {
   high: "High risk",
   critical: "Critical risk",
 };
+
+// ---------------------------------------------------------------------------
+// Verdict system (spec §3, §29): unknown is NOT safe.
+// ---------------------------------------------------------------------------
+
+/**
+ * Final verdict driven by evidence + confidence, not just arithmetic.
+ * `unknown` means the system lacked evidence — never rendered as safe.
+ */
+export type RiskVerdict =
+  | "known_safe"
+  | "low_risk"
+  | "suspicious"
+  | "high_risk"
+  | "dangerous"
+  | "unknown";
+
+export type Confidence = "high" | "medium" | "low" | "unknown";
+
+/** Which analysis layers actually produced data for this scan (§29). */
+export interface DetectionCoverage {
+  url: boolean;
+  domainIdentity: boolean;
+  threatIntel: boolean;
+  page: boolean;
+  redirects: boolean;
+  reputation: boolean;
+}
+
+export const VERDICT_LABELS: Record<RiskVerdict, string> = {
+  known_safe: "Verified safe",
+  low_risk: "Low risk",
+  suspicious: "Suspicious website",
+  high_risk: "High-risk website",
+  dangerous: "Dangerous website",
+  unknown: "Limited information",
+};
+
+export const VERDICT_RECOMMENDATIONS: Record<RiskVerdict, string> = {
+  known_safe:
+    "This domain is verified as the official organization it claims to be.",
+  low_risk:
+    "No significant indicators detected. As always, stay alert for unusual requests.",
+  suspicious:
+    "Do not enter passwords, card details, or personal information on this website.",
+  high_risk:
+    "Leave this website. Do not enter any information.",
+  dangerous:
+    "Leave this website immediately. It is a known phishing/threat.",
+  unknown:
+    "No known threat was found, but this website could not be fully verified. Proceed with caution.",
+};

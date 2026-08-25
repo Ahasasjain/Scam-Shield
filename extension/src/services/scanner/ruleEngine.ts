@@ -31,6 +31,12 @@ export interface ScanContext {
     giveawayPatterns: number;
     fakeSecurityWarnings: number;
     externalScriptOrigins: string[];
+    formActions?: Array<{
+      actionOrigin: string | null;
+      isCrossOrigin: boolean;
+      containsPassword: boolean;
+      containsPaymentFields: boolean;
+    }>;
   };
   redirectSignals?: {
     chainLength: number;

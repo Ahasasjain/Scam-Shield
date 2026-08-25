@@ -14,12 +14,16 @@ import { ScanHistory } from "@/components/ScanHistory";
 import { SettingsPanel } from "@/components/SettingsPanel";
 import { WhyThisScore } from "@/components/WhyThisScore";
 import { ErrorState, EmptyState } from "@/components/ErrorState";
+import { VerdictCard } from "@/components/VerdictCard";
+import type { DetectionCoverage, RiskVerdict } from "@shared/index";
 
 type View = "dashboard" | "history" | "settings";
 
 interface ScanResult {
   score: number;
   riskLevel: string;
+  verdict?: RiskVerdict;
+  coverage?: DetectionCoverage;
   factors: RiskFactor[];
   ai:
     | { status: "enabled"; result: unknown }
@@ -219,6 +223,10 @@ export function App({
 
             {!scanning && result && riskLevel && (
               <div className="space-y-3">
+                {result.verdict && (
+                  <VerdictCard verdict={result.verdict} coverage={result.coverage} />
+                )}
+
                 <section className="ss-animate-in rounded-xl border border-neutral-200 bg-white shadow-sm dark:border-neutral-800 dark:bg-neutral-900">
                   <SecurityScore score={result.score} riskLevel={riskLevel} />
                 </section>
