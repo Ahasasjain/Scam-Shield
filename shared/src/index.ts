@@ -180,7 +180,7 @@ export interface ExtensionSettings {
 
 export const DEFAULT_SETTINGS: ExtensionSettings = {
   aiEnabled: false,
-  autoScan: false,
+  autoScan: true,
   theme: "system",
 };
 

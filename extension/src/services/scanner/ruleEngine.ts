@@ -1,4 +1,5 @@
 import type { RiskFactor, Severity } from "@shared/index";
+import type { DomainIdentity } from "@/utils/domainIdentity";
 
 /**
  * Detection rule contract (spec §8). Every rule is deterministic and
@@ -18,7 +19,10 @@ export interface ScanContext {
     hasPunycode: boolean;
     tld: string;
     pathLength: number;
+    suspiciousTld?: boolean;
   };
+  /** Computed once by classifyDomain() — never re-derived inside rules. */
+  domainIdentity?: DomainIdentity;
   pageSignals?: {
     hasLoginForm: boolean;
     hasPasswordFieldsOnHttp: boolean;

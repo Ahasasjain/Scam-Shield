@@ -1,6 +1,10 @@
 /**
  * URL parsing and classification helpers used by the rule engine.
  * Pure functions — no Chrome APIs — so they are trivially testable.
+ *
+ * Brand/impersonation logic has moved to `domainIdentity.ts`, which uses
+ * the Public Suffix List and a brand registry. This module keeps only
+ * structural URL parsing.
  */
 
 const SUSPICIOUS_TLDS = new Set([
@@ -38,7 +42,7 @@ const URL_SHORTENERS = new Set([
   "rb.gy",
 ]);
 
-/** Well-known brand keywords used in impersonation heuristics. */
+/** Well-known brand keywords — used only for path-based weak signals now. */
 const BRAND_KEYWORDS = [
   "paypal",
   "google",
@@ -78,6 +82,7 @@ export interface ParsedUrlInfo {
   hasPunycode: boolean;
   tld: string;
   pathLength: number;
+  suspiciousTld: boolean;
 }
 
 export type ParsedUrl = ParsedUrlInfo | { valid: false; reason: string };
@@ -116,6 +121,7 @@ export function parseUrl(rawUrl: string): ParsedUrl {
     hasPunycode: hostname.includes("xn--"),
     tld,
     pathLength: url.pathname.length,
+    suspiciousTld: isSuspiciousTld(tld),
   };
 }
 
@@ -138,47 +144,16 @@ export function containsBrandKeyword(text: string): boolean {
 }
 
 /**
- * Returns the brand keyword if the URL's hostname contains a brand name but
- * the registrable domain is NOT the brand's official domain — the classic
- * impersonation pattern (e.g. paypal-secure-login.example.com).
+ * @deprecated Use `classifyDomain()` from `domainIdentity.ts` instead.
+ * Kept temporarily so existing imports keep compiling during migration.
  */
 export function findBrandImpersonation(
   hostname: string,
   registrableDomain: string,
 ): string | null {
-  const lower = hostname.toLowerCase();
-  const domain = registrableDomain.toLowerCase();
-  for (const brand of BRAND_KEYWORDS) {
-    if (lower.includes(brand) && domain !== `${brand}.com`) {
-      return brand;
-    }
-  }
+  void hostname;
+  void registrableDomain;
   return null;
-}
-
-/** Common homoglyph substitutions used in lookalike domains. */
-const HOMOGLYPHS: Record<string, string> = {
-  "0": "o",
-  "1": "l",
-  "3": "e",
-  "4": "a",
-  "5": "s",
-  "7": "t",
-  "8": "b",
-  vv: "w",
-  rn: "m",
-};
-
-export function hasLookalikePattern(registrableDomain: string): boolean {
-  const name = registrableDomain.split(".")[0] ?? "";
-  if (name.length < 4) return false;
-  const normalized = Object.entries(HOMOGLYPHS).reduce(
-    (acc, [from, to]) => acc.replaceAll(from, to),
-    name,
-  );
-  return BRAND_KEYWORDS.some(
-    (brand) => normalized === brand || normalized === `${brand}secure`,
-  );
 }
 
 export function isChromeInternalUrl(url: string): boolean {

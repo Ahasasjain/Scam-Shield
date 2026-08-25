@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { scoreToRiskLevel, type RiskFactor, type RiskLevel } from "@shared/index";
 import { scanWebsite } from "@/services/api/securityApi";
 import { getAiBaseUrl, setAiBaseUrl } from "@/utils/storage";
@@ -46,7 +46,14 @@ const ERROR_TITLES: Record<string, string> = {
  * Shared dashboard app used by both the popup and the side panel.
  * Business logic lives in hooks/services — this is presentation + glue only.
  */
-export function App({ variant }: { variant: "popup" | "sidepanel" }) {
+export function App({
+  variant,
+  autoWarning = false,
+}: {
+  variant: "popup" | "sidepanel";
+  /** Set when the background worker opened the panel due to a low auto-scan score. */
+  autoWarning?: boolean;
+}) {
   const { settings, update } = useSettings();
   const [view, setView] = useState<View>("dashboard");
   const [scanning, setScanning] = useState(false);
@@ -66,8 +73,8 @@ export function App({ variant }: { variant: "popup" | "sidepanel" }) {
       .catch(() => setCurrentUrl(null));
   }, []);
 
-  const runScan = useCallback(async () => {
-    if (scanning) return;
+  const runScan = useCallback(async (): Promise<ScanResult | null> => {
+    if (scanning) return null;
     setScanning(true);
     setError(null);
     setResult(null);
@@ -78,15 +85,17 @@ export function App({ variant }: { variant: "popup" | "sidepanel" }) {
       const tabId = tabs[0]?.id;
       if (typeof tabId !== "number") {
         setError({ code: "tab_not_found", message: "No active tab found." });
-        return;
+        return null;
       }
       setProgressStep("Collecting signals");
       const response = await scanWebsite({ tabId });
       if (!response.ok) {
         setError(response.error);
-        return;
+        return null;
       }
-      setResult(response.data as ScanResult);
+      const data = response.data as ScanResult;
+      setResult(data);
+      return data;
     } catch {
       setError({
         code: "scan_failed",
@@ -95,7 +104,19 @@ export function App({ variant }: { variant: "popup" | "sidepanel" }) {
     } finally {
       setScanning(false);
     }
+    return null;
   }, [scanning]);
+
+  // When the panel was auto-opened due to a low auto-scan score, run a
+  // fresh scan immediately so the user sees current results + warning.
+  const autoRan = useRef(false);
+  useEffect(() => {
+    if (autoWarning && !autoRan.current) {
+      autoRan.current = true;
+      void runScan();
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [autoWarning]);
 
   const riskLevel: RiskLevel | null = result ? scoreToRiskLevel(result.score) : null;
 
@@ -146,14 +167,36 @@ export function App({ variant }: { variant: "popup" | "sidepanel" }) {
               onChange={(enabled) => update({ aiEnabled: enabled })}
             />
 
-            <button
-              type="button"
-              onClick={() => void runScan()}
-              disabled={scanning || !currentUrl}
-              className="w-full rounded-xl bg-shield-600 py-2.5 text-sm font-semibold text-white shadow-sm transition-colors hover:bg-shield-700 disabled:cursor-not-allowed disabled:opacity-50"
-            >
-              {scanning ? "Scanning…" : "Scan this website"}
-            </button>
+            <div className="flex justify-end">
+              <button
+                type="button"
+                onClick={() => void runScan()}
+                disabled={scanning || !currentUrl}
+                className="inline-flex items-center gap-2 rounded-xl bg-shield-600 px-5 py-2.5 text-sm font-semibold text-white shadow-sm transition-colors hover:bg-shield-700 disabled:cursor-not-allowed disabled:opacity-50"
+              >
+                {scanning ? (
+                  <>
+                    <span
+                      aria-hidden="true"
+                      className="h-3.5 w-3.5 animate-spin rounded-full border-2 border-white/40 border-t-white"
+                    />
+                    Scanning…
+                  </>
+                ) : (
+                  <>🔍 Scan this website</>
+                )}
+              </button>
+            </div>
+
+            {autoWarning && riskLevel && (riskLevel === "high" || riskLevel === "critical") && (
+              <div
+                role="alert"
+                className="ss-animate-in rounded-xl border border-red-400 bg-red-100 p-3 text-sm font-semibold text-red-900 dark:border-red-700 dark:bg-red-950 dark:text-red-200"
+              >
+                ⚠️ Automatic scan flagged this website as {riskLevel} risk.
+                Review the findings below before entering any information.
+              </div>
+            )}
 
             {scanning && <ScanProgress step={progressStep} />}
 

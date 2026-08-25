@@ -19,7 +19,7 @@ describe("storage utils", () => {
     const settings = await getSettings();
     expect(settings).toEqual({
       aiEnabled: false, // spec §7: AI default OFF
-      autoScan: false,
+      autoScan: true, // user request: automatic scanning ON by default
       theme: "system",
     });
   });

@@ -20,6 +20,7 @@ import {
   getSettings,
   saveSettings,
 } from "@/utils/storage";
+import { classifyDomain } from "@/utils/domainIdentity";
 
 const log = createLogger("background");
 
@@ -130,9 +131,11 @@ async function handleScanWebsite(
   const domainSignals = await collectDomainSignals({ urlSignals: parsed });
 
   // 3. Run deterministic rule engine.
+  const domainIdentity = classifyDomain(parsed.hostname);
   const context: ScanContext = {
     url: validated.url,
     urlSignals: parsed,
+    domainIdentity,
     pageSignals: pageSignals ?? undefined,
     redirectSignals: redirectSignals ?? undefined,
     domainSignals: domainSignals ?? undefined,
@@ -170,8 +173,10 @@ async function handleScanWebsite(
     }
   }
 
-  // 5. Combine + score (rule findings are the floor; AI adds deductions).
-  const { score, riskLevel, breakdown } = calculateScore(ruleFactors, aiFactors);
+  // 5. Combine + score with correlation rules and evidence caps.
+  const { score, riskLevel, breakdown } = calculateScore(ruleFactors, aiFactors, {
+    domainIdentity,
+  });
 
   // 6. Persist minimal history metadata.
   await addHistoryEntry({
@@ -234,4 +239,66 @@ async function collectRedirectSignals(_tabId: number): Promise<RedirectSignals |
   // Full chain tracking requires webNavigation listeners; V1 reports
   // unavailable when the optional permission isn't granted.
   return null;
+}
+
+// ---------------------------------------------------------------------------
+// Automatic scanning (user request): when enabled, scan every page load and
+// open the side panel with a warning if the score falls below the threshold.
+// ---------------------------------------------------------------------------
+
+const AUTO_SCAN_THRESHOLD = 50; // below this = medium risk or worse
+const AUTO_SCAN_DEBOUNCE_MS = 15_000;
+const lastAutoScan = new Map<number, { url: string; at: number }>();
+
+chrome.tabs.onUpdated.addListener((tabId, changeInfo, tab) => {
+  if (changeInfo.status !== "complete" || !tab.url) return;
+  void maybeAutoScan(tabId, tab.url);
+});
+
+async function maybeAutoScan(tabId: number, url: string): Promise<void> {
+  try {
+    const settings = await getSettings();
+    if (!settings.autoScan) return;
+
+    // Skip browser-internal and non-http(s) pages.
+    if (isChromeInternalUrl(url) || !/^https?:\/\//i.test(url)) return;
+
+    // Debounce repeated scans of the same URL in a short window.
+    const now = Date.now();
+    const previous = lastAutoScan.get(tabId);
+    if (
+      previous &&
+      previous.url === url &&
+      now - previous.at < AUTO_SCAN_DEBOUNCE_MS * 10
+    ) {
+      return;
+    }
+    lastAutoScan.set(tabId, { url, at: now });
+
+    const response = await handleScanWebsite({ tabId });
+    if (!response.ok) return;
+
+    if (response.data.score < AUTO_SCAN_THRESHOLD) {
+      await openSidePanelWithWarning(tabId);
+    }
+  } catch (error) {
+    log.warn("Auto-scan failed", error);
+  }
+}
+
+async function openSidePanelWithWarning(tabId: number): Promise<void> {
+  try {
+    await chrome.sidePanel.setOptions({
+      tabId,
+      path: "sidepanel.html?warning=1",
+      enabled: true,
+    });
+    await chrome.sidePanel.open({ tabId });
+  } catch (error) {
+    // sidePanel.open requires a user gesture in some Chrome versions —
+    // fall back to the badge as the attention signal.
+    log.warn("Side panel auto-open failed", error);
+    void chrome.action.setBadgeBackgroundColor({ color: "#ef4444" });
+    void chrome.action.setBadgeText({ tabId, text: "!" });
+  }
 }
