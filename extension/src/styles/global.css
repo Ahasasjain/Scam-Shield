@@ -1,0 +1,85 @@
+/*
+ * ScamShield global styles — Tailwind v4 with class-based dark mode.
+ * Theme tokens are CSS variables so both popup and side panel share them.
+ */
+@import "tailwindcss";
+
+@custom-variant dark (&:where(.dark, .dark *));
+
+@theme {
+  --color-shield-50: #ecfdf5;
+  --color-shield-100: #d1fae5;
+  --color-shield-500: #10b981;
+  --color-shield-600: #059669;
+  --color-shield-700: #047857;
+
+  --color-risk-safe: #10b981;
+  --color-risk-low: #84cc16;
+  --color-risk-medium: #f59e0b;
+  --color-risk-high: #f97316;
+  --color-risk-critical: #ef4444;
+
+  --font-sans: "Inter", system-ui, -apple-system, "Segoe UI", sans-serif;
+}
+
+:root {
+  color-scheme: light;
+}
+
+.dark {
+  color-scheme: dark;
+}
+
+html,
+body {
+  margin: 0;
+  padding: 0;
+  font-family: var(--font-sans);
+  -webkit-font-smoothing: antialiased;
+}
+
+/* Respect reduced-motion preferences (spec §30/§38). */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+}
+
+/* Visible focus ring for keyboard navigation. */
+:focus-visible {
+  outline: 2px solid var(--color-shield-500);
+  outline-offset: 2px;
+  border-radius: 4px;
+}
+
+/* Subtle entrance animation for cards. */
+@keyframes ss-fade-up {
+  from {
+    opacity: 0;
+    transform: translateY(6px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.ss-animate-in {
+  animation: ss-fade-up 0.25s ease-out both;
+}
+
+/* Score ring reveal. */
+@keyframes ss-score-reveal {
+  from {
+    stroke-dashoffset: var(--ss-dash-full);
+  }
+}
+
+.ss-score-ring {
+  animation: ss-score-reveal 0.8s ease-out both;
+}
