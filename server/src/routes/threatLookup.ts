@@ -1,6 +1,11 @@
 import { Router } from "express";
 import { z } from "zod";
 import { logger } from "../lib/logger.js";
+import {
+  lookupFeed,
+  startFeedRefresh,
+  stopFeedRefresh,
+} from "../services/openPhishFeed.js";
 
 /**
  * POST /api/threat-lookup (spec §4–§6)
@@ -76,6 +81,19 @@ function checkLocalFeed(
   url: string,
   registrableDomain: string | null,
 ): ThreatLookupResponse {
+  // 1. OpenPhish feed (millions of live phishing URLs, refreshed every 30 min).
+  const feedHit = lookupFeed(url);
+  if (feedHit) {
+    return {
+      available: true,
+      matched: true,
+      threatType: feedHit.threatType,
+      confidence: feedHit.confidence,
+      source: "openphish",
+    };
+  }
+
+  // 2. Curated static fallback for known brand-abuse domains.
   const host = (() => {
     try {
       return new URL(url).hostname.toLowerCase();
@@ -97,6 +115,14 @@ function checkLocalFeed(
         source: "scamshield-local-feed",
       }
     : { available: true, matched: false };
+}
+
+export function startThreatFeed(): void {
+  startFeedRefresh();
+}
+
+export function stopThreatFeed(): void {
+  stopFeedRefresh();
 }
 
 export function createThreatLookupRouter(): Router {

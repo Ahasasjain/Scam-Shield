@@ -45,8 +45,15 @@ function flattenExtensionHtml(): Plugin {
  * - background                   → service worker (ES module)
  * - content                      → on-demand content script (IIFE, no imports)
  */
-export default defineConfig({
+export default defineConfig(() => ({
   plugins: [react(), tailwindcss(), flattenExtensionHtml()],
+  define: {
+    // Baked at build time — end users never configure an API endpoint.
+    // Set SCAMSHIELD_API_URL when building for production.
+    __SCAMSHIELD_API_URL__: JSON.stringify(
+      process.env.SCAMSHIELD_API_URL ?? "",
+    ),
+  },
   resolve: {
     alias: {
       "@shared": resolve(root, "../shared/src"),
@@ -81,4 +88,4 @@ export default defineConfig({
       },
     },
   },
-});
+}));

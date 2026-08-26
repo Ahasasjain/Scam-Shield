@@ -304,7 +304,6 @@ async function collectRedirectSignals(_tabId: number): Promise<RedirectSignals |
 // open the side panel with a warning if the score falls below the threshold.
 // ---------------------------------------------------------------------------
 
-const AUTO_SCAN_THRESHOLD = 50; // below this = medium risk or worse
 const AUTO_SCAN_DEBOUNCE_MS = 15_000;
 const lastAutoScan = new Map<number, { url: string; at: number }>();
 
@@ -336,8 +335,17 @@ async function maybeAutoScan(tabId: number, url: string): Promise<void> {
     const response = await handleScanWebsite({ tabId });
     if (!response.ok) return;
 
-    if (response.data.score < AUTO_SCAN_THRESHOLD) {
+    // Warn on any non-safe verdict from the evidence-based system.
+    const { verdict } = response.data;
+    if (
+      verdict === "suspicious" ||
+      verdict === "high_risk" ||
+      verdict === "dangerous"
+    ) {
       await openSidePanelWithWarning(tabId);
+    } else {
+      // Clear any stale alert badge on safe results.
+      void chrome.action.setBadgeText({ tabId, text: "" });
     }
   } catch (error) {
     log.warn("Auto-scan failed", error);

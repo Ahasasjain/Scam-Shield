@@ -3,7 +3,11 @@ import express from "express";
 import helmet from "helmet";
 import { createAnalyzeRouter } from "./routes/analyze.js";
 import { createHealthRouter } from "./routes/health.js";
-import { createThreatLookupRouter } from "./routes/threatLookup.js";
+import {
+  createThreatLookupRouter,
+  startThreatFeed,
+  stopThreatFeed,
+} from "./routes/threatLookup.js";
 import { createRateLimiter } from "./middleware/rateLimit.js";
 import { createOriginCheck } from "./middleware/originCheck.js";
 import { errorHandler, notFoundHandler } from "./middleware/errorHandler.js";
@@ -74,6 +78,9 @@ function createApp(env: Env): express.Express {
 const env = loadEnv();
 const app = createApp(env);
 
+// Start the OpenPhish threat feed refresh cycle.
+startThreatFeed();
+
 const server = app.listen(Number(env.PORT), () => {
   logger.info(`ScamShield API listening on port ${env.PORT}`);
 });
@@ -82,6 +89,7 @@ const server = app.listen(Number(env.PORT), () => {
 for (const signal of ["SIGINT", "SIGTERM"] as const) {
   process.on(signal, () => {
     logger.info(`${signal} received — shutting down`);
+    stopThreatFeed();
     server.close(() => process.exit(0));
   });
 }

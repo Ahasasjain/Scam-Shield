@@ -1,7 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { scoreToRiskLevel, type RiskFactor, type RiskLevel } from "@shared/index";
 import { scanWebsite } from "@/services/api/securityApi";
-import { getAiBaseUrl, setAiBaseUrl } from "@/utils/storage";
 import { useSettings, useTheme } from "@/hooks/useExtensionState";
 import { RiskFactorCard } from "@/components/RiskFactors";
 import { AIAnalysis } from "@/components/AIAnalysis";
@@ -62,13 +61,11 @@ export function App({
   const [progressStep, setProgressStep] = useState("Preparing");
   const [result, setResult] = useState<ScanResult | null>(null);
   const [error, setError] = useState<ScanError | null>(null);
-  const [aiBaseUrl, setAiBaseUrlState] = useState("");
   const [currentUrl, setCurrentUrl] = useState<string | null>(null);
 
   useTheme(settings?.theme);
 
   useEffect(() => {
-    void getAiBaseUrl().then(setAiBaseUrlState);
     void chrome.tabs
       .query({ active: true, currentWindow: true })
       .then((tabs) => setCurrentUrl(tabs[0]?.url ?? null))
@@ -271,11 +268,6 @@ export function App({
         {view === "settings" && settings && (
           <SettingsPanel
             settings={settings}
-            aiBaseUrl={aiBaseUrl}
-            onAiBaseUrlChange={(url) => {
-              setAiBaseUrlState(url);
-              void setAiBaseUrl(url);
-            }}
             onUpdate={(patch) => update(patch)}
             onReset={() =>
               void update({ aiEnabled: false, autoScan: false, theme: "system" })

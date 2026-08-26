@@ -3,8 +3,6 @@ import { AIModeToggle } from "./AIModeToggle";
 
 interface SettingsPanelProps {
   settings: ExtensionSettings;
-  aiBaseUrl: string;
-  onAiBaseUrlChange: (url: string) => void;
   onUpdate: (patch: Partial<ExtensionSettings>) => void;
   onReset: () => void;
 }
@@ -14,8 +12,6 @@ const THEMES: ThemeSetting[] = ["light", "dark", "system"];
 /** Settings (spec §25) — honest privacy explanation, no overclaiming. */
 export function SettingsPanel({
   settings,
-  aiBaseUrl,
-  onAiBaseUrlChange,
   onUpdate,
   onReset,
 }: SettingsPanelProps) {
@@ -72,25 +68,9 @@ export function SettingsPanel({
       </div>
 
       {settings.aiEnabled && (
-        <div className="rounded-xl border border-neutral-200 bg-white px-3 py-2.5 dark:border-neutral-800 dark:bg-neutral-900">
-          <label
-            htmlFor="ai-base-url"
-            className="block text-sm font-medium text-neutral-900 dark:text-neutral-100"
-          >
-            AI backend URL
-          </label>
-          <p className="mb-2 text-[11px] text-neutral-500 dark:text-neutral-400">
-            Your ScamShield API endpoint. The API key stays on the server — never in
-            this extension.
-          </p>
-          <input
-            id="ai-base-url"
-            type="url"
-            value={aiBaseUrl}
-            placeholder="https://your-api.example.com"
-            onChange={(e) => onAiBaseUrlChange(e.target.value)}
-            className="w-full rounded-lg border border-neutral-300 bg-white px-2.5 py-1.5 text-xs text-neutral-900 placeholder:text-neutral-400 focus:border-shield-500 dark:border-neutral-700 dark:bg-neutral-800 dark:text-neutral-100"
-          />
+        <div className="rounded-xl border border-violet-200 bg-violet-50/60 px-3 py-2.5 text-[11px] leading-relaxed text-violet-800 dark:border-violet-900 dark:bg-violet-950/40 dark:text-violet-300">
+          AI analysis runs through the official ScamShield API. Only minimal
+          security signals are sent — never page contents or credentials.
         </div>
       )}
 
@@ -100,9 +80,10 @@ export function SettingsPanel({
         </h3>
         <p>
           ScamShield stores scan history and settings only on this device. With AI off,
-          nothing leaves your browser. With AI on, only minimal security signals (URL
-          structure, page signal counts, redirect info) are sent to the backend URL
-          above — never passwords, cookies, tokens, or full page contents.
+          nothing leaves your browser except the threat-feed check (only the site's
+          domain is queried). With AI on, only minimal security signals (URL structure,
+          page signal counts) are sent to the ScamShield API — never passwords,
+          cookies, tokens, or full page contents.
         </p>
       </section>
 

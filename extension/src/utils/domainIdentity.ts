@@ -347,6 +347,43 @@ export function classifyDomain(hostname: string): DomainIdentity {
     };
   }
 
+  // Brand keyword embedded in the registrable domain itself on a
+  // non-official domain (e.g. paypal-support.com, google-login.net).
+  // This is the classic "brand + phishing keyword" registration pattern.
+  if (brand && regLower.includes(primaryName)) {
+    const PHISHING_KEYWORDS = [
+      "support",
+      "login",
+      "secure",
+      "verify",
+      "account",
+      "update",
+      "billing",
+      "help",
+      "service",
+      "recover",
+      "unlock",
+      "confirm",
+      "signin",
+      "alert",
+      "notice",
+      "case",
+      "id",
+    ];
+    const hasPhishKeyword = PHISHING_KEYWORDS.some((kw) =>
+      regLower.includes(kw),
+    );
+    if (hasPhishKeyword) {
+      return {
+        ...base,
+        detectedBrand: brand.id,
+        relationship: "lookalike",
+        matchedOfficialDomain: brand.officialDomains[0],
+        similarity: LOOKALIKE_MODERATE_SIMILARITY,
+      };
+    }
+  }
+
   // No brand relationship found.
   return base;
 }
