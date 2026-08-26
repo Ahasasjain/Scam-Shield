@@ -221,9 +221,7 @@ export function App({
 
             {!scanning && result && riskLevel && (
               <div className="space-y-3">
-                {result.verdict && (
-                  <VerdictCard verdict={result.verdict} />
-                )}
+                {result.verdict && <VerdictCard verdict={result.verdict} />}
 
                 {(riskLevel === "high" || riskLevel === "critical") && (
                   <div

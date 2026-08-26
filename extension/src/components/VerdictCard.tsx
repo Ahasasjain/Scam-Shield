@@ -4,7 +4,10 @@ import {
   type RiskVerdict,
 } from "@shared/index";
 
-const VERDICT_STYLES: Record<RiskVerdict, { box: string; icon: string; title: string }> = {
+const VERDICT_STYLES: Record<
+  RiskVerdict,
+  { box: string; icon: string; title: string }
+> = {
   dangerous: {
     box: "border-red-500 bg-red-100 dark:bg-red-950 dark:border-red-600",
     icon: "🛑",
