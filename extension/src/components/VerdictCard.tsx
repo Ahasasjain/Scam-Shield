@@ -1,7 +1,6 @@
 import {
   VERDICT_LABELS,
   VERDICT_RECOMMENDATIONS,
-  type DetectionCoverage,
   type RiskVerdict,
 } from "@shared/index";
 
@@ -38,39 +37,30 @@ const VERDICT_STYLES: Record<RiskVerdict, { box: string; icon: string; title: st
   },
 };
 
-const COVERAGE_LABELS: Record<keyof DetectionCoverage, string> = {
-  url: "URL analysis",
-  domainIdentity: "Domain analysis",
-  threatIntel: "Threat intelligence",
-  page: "Page analysis",
-  redirects: "Redirect analysis",
-  reputation: "Reputation data",
-};
-
 interface VerdictCardProps {
   verdict: RiskVerdict;
-  coverage?: DetectionCoverage;
 }
 
 /**
- * Verdict-first display (spec §31): leads with the verdict and reasons,
- * never a bare number. Unknown coverage is shown honestly.
+ * Verdict-first display (spec §31): leads with the verdict and
+ * recommendation. No numeric score, no coverage noise — just whether the
+ * site is reliable or not.
  */
-export function VerdictCard({ verdict, coverage }: VerdictCardProps) {
+export function VerdictCard({ verdict }: VerdictCardProps) {
   const style = VERDICT_STYLES[verdict];
 
   return (
     <section
       role="status"
       aria-label={`Verdict: ${VERDICT_LABELS[verdict]}`}
-      className={`ss-animate-in rounded-xl border p-3 ${style.box}`}
+      className={`ss-animate-in rounded-xl border p-4 ${style.box}`}
     >
-      <div className="flex items-start gap-2">
-        <span aria-hidden="true" className="text-xl leading-none">
+      <div className="flex items-start gap-3">
+        <span aria-hidden="true" className="text-2xl leading-none">
           {style.icon}
         </span>
         <div className="min-w-0">
-          <h2 className={`text-sm font-bold ${style.title}`}>
+          <h2 className={`text-base font-bold ${style.title}`}>
             {VERDICT_LABELS[verdict]}
           </h2>
           <p className="mt-1 text-xs leading-relaxed text-neutral-700 dark:text-neutral-300">
@@ -78,28 +68,6 @@ export function VerdictCard({ verdict, coverage }: VerdictCardProps) {
           </p>
         </div>
       </div>
-
-      {coverage && (
-        <details className="mt-2">
-          <summary className="cursor-pointer text-[11px] font-medium text-neutral-600 dark:text-neutral-400">
-            Coverage
-          </summary>
-          <ul className="mt-1 space-y-0.5">
-            {(Object.keys(COVERAGE_LABELS) as Array<keyof DetectionCoverage>).map(
-              (key) => (
-                <li
-                  key={key}
-                  className="flex items-center gap-1.5 text-[11px] text-neutral-600 dark:text-neutral-400"
-                >
-                  <span aria-hidden="true">{coverage[key] ? "✓" : "⚠"}</span>
-                  {COVERAGE_LABELS[key]}
-                  {!coverage[key] && " unavailable"}
-                </li>
-              ),
-            )}
-          </ul>
-        </details>
-      )}
     </section>
   );
 }

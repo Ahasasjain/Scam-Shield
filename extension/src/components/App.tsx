@@ -3,13 +3,11 @@ import { scoreToRiskLevel, type RiskFactor, type RiskLevel } from "@shared/index
 import { scanWebsite } from "@/services/api/securityApi";
 import { getAiBaseUrl, setAiBaseUrl } from "@/utils/storage";
 import { useSettings, useTheme } from "@/hooks/useExtensionState";
-import { SecurityScore } from "@/components/SecurityScore";
 import { RiskFactorCard } from "@/components/RiskFactors";
 import { AIAnalysis } from "@/components/AIAnalysis";
 import { AIModeToggle } from "@/components/AIModeToggle";
 import { WebsiteInfo } from "@/components/WebsiteInfo";
 import { ScanProgress } from "@/components/ScanProgress";
-import { RecommendationCard } from "@/components/RecommendationCard";
 import { ScanHistory } from "@/components/ScanHistory";
 import { SettingsPanel } from "@/components/SettingsPanel";
 import { WhyThisScore } from "@/components/WhyThisScore";
@@ -224,14 +222,8 @@ export function App({
             {!scanning && result && riskLevel && (
               <div className="space-y-3">
                 {result.verdict && (
-                  <VerdictCard verdict={result.verdict} coverage={result.coverage} />
+                  <VerdictCard verdict={result.verdict} />
                 )}
-
-                <section className="ss-animate-in rounded-xl border border-neutral-200 bg-white shadow-sm dark:border-neutral-800 dark:bg-neutral-900">
-                  <SecurityScore score={result.score} riskLevel={riskLevel} />
-                </section>
-
-                <RecommendationCard riskLevel={riskLevel} />
 
                 {(riskLevel === "high" || riskLevel === "critical") && (
                   <div
@@ -260,7 +252,7 @@ export function App({
 
                 <details className="rounded-xl border border-neutral-200 bg-white p-3 dark:border-neutral-800 dark:bg-neutral-900">
                   <summary className="cursor-pointer text-sm font-semibold">
-                    Why this score?
+                    Why this verdict?
                   </summary>
                   <div className="mt-2">
                     <WhyThisScore breakdown={result.breakdown} />

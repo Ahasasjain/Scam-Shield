@@ -13,6 +13,8 @@ import { runRuleEngine } from "@/services/scanner";
 import { collectDomainSignals } from "@/services/scanner/reputationAnalyzer";
 import {
   BackendThreatProvider,
+  CompositeThreatProvider,
+  LocalFeedProvider,
   lookupThreatIntelligence,
 } from "@/services/scanner/threatIntelligenceAnalyzer";
 import { deriveVerdict } from "@/services/scanner/correlationEngine";
@@ -140,12 +142,14 @@ async function handleScanWebsite(
   const domainSignals = await collectDomainSignals({ urlSignals: parsed });
 
   // 3. Threat intelligence (spec §4–§7) — runs before rules; a confirmed
-  // match overrides everything. Failure never becomes "safe" (§3).
+  // match overrides everything. Composite provider: backend (if configured)
+  // first, then the bundled local feed — so threat intel ALWAYS runs.
   const settings = await getSettings();
   const aiBaseUrl = await getAiBaseUrl();
-  const threatProvider = aiBaseUrl
-    ? new BackendThreatProvider({ baseUrl: aiBaseUrl })
-    : null;
+  const providers = aiBaseUrl
+    ? [new BackendThreatProvider({ baseUrl: aiBaseUrl }), new LocalFeedProvider()]
+    : [new LocalFeedProvider()];
+  const threatProvider = new CompositeThreatProvider(providers);
   const threat = await lookupThreatIntelligence(
     { normalizedUrl: validated.url, registrableDomain: parsed.registrableDomain },
     threatProvider,

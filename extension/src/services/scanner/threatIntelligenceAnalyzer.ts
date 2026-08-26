@@ -66,15 +66,11 @@ function cacheStorage(): chrome.storage.StorageArea {
   return chrome.storage.local;
 }
 
-async function readCache(
-  key: string,
-): Promise<CachedThreatResult | null> {
+async function readCache(key: string): Promise<CachedThreatResult | null> {
   const result = await cacheStorage().get(CACHE_KEY);
   const stored = result[CACHE_KEY];
   if (!Array.isArray(stored)) return null;
-  const entry = (stored as CachedThreatResult[]).find(
-    (e) => e.normalizedUrl === key,
-  );
+  const entry = (stored as CachedThreatResult[]).find((e) => e.normalizedUrl === key);
   if (!entry) return null;
   if (Date.now() > entry.expiresAt) return null; // expired → treat as miss
   return entry;
@@ -85,10 +81,10 @@ async function writeCache(entry: CachedThreatResult): Promise<void> {
   const stored = Array.isArray(result[CACHE_KEY])
     ? (result[CACHE_KEY] as CachedThreatResult[])
     : [];
-  const next = [entry, ...stored.filter((e) => e.normalizedUrl !== entry.normalizedUrl)].slice(
-    0,
-    CACHE_LIMIT,
-  );
+  const next = [
+    entry,
+    ...stored.filter((e) => e.normalizedUrl !== entry.normalizedUrl),
+  ].slice(0, CACHE_LIMIT);
   await cacheStorage().set({ [CACHE_KEY]: next });
 }
 
@@ -167,6 +163,72 @@ export class BackendThreatProvider implements ThreatIntelProvider {
 
 function unavailable(): ThreatIntelMatch {
   return { available: false, matched: false, checkedAt: Date.now() };
+}
+
+// ---------------------------------------------------------------------------
+// Bundled local feed (§4): always available, zero network, zero config.
+// Mirrors the server-side curated feed so threat intel works offline.
+// ---------------------------------------------------------------------------
+
+const LOCAL_FEED = new Set<string>([
+  "paypa1.com",
+  "g00gle.com",
+  "faceb00k.com",
+  "amaz0n-secure.com",
+  "netflix-billing.com",
+  "appleid-verify.com",
+  "microsoft-support.xyz",
+  "wellsfargo-login.net",
+  "chase-verify.com",
+  "steamcommunuty.com",
+  "coinbase-pro-login.com",
+  "instagram-help.center",
+]);
+
+export class LocalFeedProvider implements ThreatIntelProvider {
+  name = "scamshield-local-feed";
+
+  async lookupUrl(input: ThreatIntelLookupInput): Promise<ThreatIntelMatch> {
+    const host = (() => {
+      try {
+        return new URL(input.normalizedUrl).hostname.toLowerCase();
+      } catch {
+        return input.registrableDomain?.toLowerCase() ?? "";
+      }
+    })();
+
+    const matched =
+      (input.registrableDomain !== null &&
+        LOCAL_FEED.has(input.registrableDomain.toLowerCase())) ||
+      LOCAL_FEED.has(host);
+
+    return {
+      available: true,
+      matched,
+      threatType: matched ? "phishing" : undefined,
+      confidence: matched ? "high" : undefined,
+      source: this.name,
+      checkedAt: Date.now(),
+    };
+  }
+}
+
+/**
+ * Composite provider: tries the backend first (richer feeds), falls back to
+ * the bundled local feed so threat intel is ALWAYS available.
+ */
+export class CompositeThreatProvider implements ThreatIntelProvider {
+  name = "scamshield-composite";
+
+  constructor(private readonly providers: ThreatIntelProvider[]) {}
+
+  async lookupUrl(input: ThreatIntelLookupInput): Promise<ThreatIntelMatch> {
+    for (const provider of this.providers) {
+      const result = await provider.lookupUrl(input);
+      if (result.available) return result;
+    }
+    return unavailable();
+  }
 }
 
 // ---------------------------------------------------------------------------

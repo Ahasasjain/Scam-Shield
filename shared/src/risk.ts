@@ -85,16 +85,13 @@ export const VERDICT_LABELS: Record<RiskVerdict, string> = {
 };
 
 export const VERDICT_RECOMMENDATIONS: Record<RiskVerdict, string> = {
-  known_safe:
-    "This domain is verified as the official organization it claims to be.",
+  known_safe: "This domain is verified as the official organization it claims to be.",
   low_risk:
     "No significant indicators detected. As always, stay alert for unusual requests.",
   suspicious:
     "Do not enter passwords, card details, or personal information on this website.",
-  high_risk:
-    "Leave this website. Do not enter any information.",
-  dangerous:
-    "Leave this website immediately. It is a known phishing/threat.",
+  high_risk: "Leave this website. Do not enter any information.",
+  dangerous: "Leave this website immediately. It is a known phishing/threat.",
   unknown:
     "No known threat was found, but this website could not be fully verified. Proceed with caution.",
 };

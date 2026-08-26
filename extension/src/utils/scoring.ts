@@ -1,5 +1,8 @@
 import { scoreToRiskLevel, type RiskFactor, type RiskLevel } from "@shared/index";
-import { evaluateCorrelations, type CorrelationInput } from "@/services/scanner/correlationEngine";
+import {
+  evaluateCorrelations,
+  type CorrelationInput,
+} from "@/services/scanner/correlationEngine";
 
 export { evaluateCorrelations } from "@/services/scanner/correlationEngine";
 

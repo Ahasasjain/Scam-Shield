@@ -123,10 +123,7 @@ export function createThreatLookupRouter(): Router {
         // Browsing here using server-side env credentials.
         const response = checkLocalFeed(url, registrableDomain ?? null);
         setCached(cacheKey, response);
-        logger.debug(
-          { url, matched: response.matched },
-          "threat-lookup complete",
-        );
+        logger.debug({ url, matched: response.matched }, "threat-lookup complete");
         res.json(response);
       } catch (error) {
         next(error);

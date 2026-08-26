@@ -22,8 +22,7 @@ export function evaluateCorrelations(
   const bonuses: RiskFactor[] = [];
   const ids = new Set(factors.map((f) => f.id));
 
-  const hasCredentialForm =
-    ids.has("page-login-form") || ids.has("page-payment-form");
+  const hasCredentialForm = ids.has("page-login-form") || ids.has("page-payment-form");
   const hasUrgency = ids.has("page-urgency-language");
   const hasFakeWarning = ids.has("page-fake-warnings");
   const hasGiveaway = ids.has("page-giveaway-patterns");
@@ -79,7 +78,9 @@ export function evaluateCorrelations(
 
   // Generic phishing (§21): unrelated domain + credentials + ANY pressure/
   // deception signal. This is what makes non-brand phishing score risky.
-  const deceptionSignals = [hasUrgency, hasFakeWarning, hasGiveaway].filter(Boolean).length;
+  const deceptionSignals = [hasUrgency, hasFakeWarning, hasGiveaway].filter(
+    Boolean,
+  ).length;
   const weakUrlSignals =
     ids.has("url-suspicious-tld") ||
     ids.has("url-hyphen-overload") ||
@@ -160,8 +161,7 @@ export function deriveVerdict(input: VerdictInput): RiskVerdict {
 
   const ids = new Set(factorIds ?? []);
   const relationship = domainIdentity?.relationship;
-  const official =
-    relationship === "official" || relationship === "trusted-subdomain";
+  const official = relationship === "official" || relationship === "trusted-subdomain";
 
   // Evidence-based escalations independent of arithmetic score.
   if (ids.has("page-cross-origin-credentials")) {

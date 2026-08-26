@@ -74,18 +74,20 @@ describe("threat intelligence (spec §4–§7)", () => {
 
   it("unavailable lookup never overrides to safe", () => {
     expect(
-      threatVerdictOverride({ available: false, matched: false, checkedAt: Date.now() }),
+      threatVerdictOverride({
+        available: false,
+        matched: false,
+        checkedAt: Date.now(),
+      }),
     ).toBeNull();
   });
 
   it("caches negative results but never caches outages (§7)", async () => {
-    const fetchMock = vi
-      .fn()
-      .mockResolvedValueOnce(
-        new Response(JSON.stringify({ available: true, matched: false }), {
-          status: 200,
-        }),
-      );
+    const fetchMock = vi.fn().mockResolvedValueOnce(
+      new Response(JSON.stringify({ available: true, matched: false }), {
+        status: 200,
+      }),
+    );
     vi.stubGlobal("fetch", fetchMock);
     const provider = new BackendThreatProvider({ baseUrl: "https://api.test" });
 
