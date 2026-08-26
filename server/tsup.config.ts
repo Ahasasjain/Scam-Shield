@@ -12,6 +12,10 @@ export default defineConfig({
   outDir: "dist",
   clean: true,
   sourcemap: true,
-  // External only true runtime node_modules deps; workspace source is bundled.
+  // External: true runtime node_modules deps only. The @scamshield/shared
+  // workspace package ships raw TypeScript (main points at src/index.ts),
+  // so it MUST be bundled — leaving it external makes `node dist/index.js`
+  // crash with ERR_UNKNOWN_FILE_EXTENSION at runtime.
   external: ["openai", "express", "helmet", "cors", "express-rate-limit", "pino"],
+  noExternal: [/@scamshield\/shared/],
 });

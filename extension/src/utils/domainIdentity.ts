@@ -370,9 +370,7 @@ export function classifyDomain(hostname: string): DomainIdentity {
       "case",
       "id",
     ];
-    const hasPhishKeyword = PHISHING_KEYWORDS.some((kw) =>
-      regLower.includes(kw),
-    );
+    const hasPhishKeyword = PHISHING_KEYWORDS.some((kw) => regLower.includes(kw));
     if (hasPhishKeyword) {
       return {
         ...base,

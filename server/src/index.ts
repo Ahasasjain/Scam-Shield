@@ -1,4 +1,6 @@
-import "dotenv/config";
+import { config as loadDotenv } from "dotenv";
+import { fileURLToPath } from "node:url";
+import path from "node:path";
 import express from "express";
 import helmet from "helmet";
 import { createAnalyzeRouter } from "./routes/analyze.js";
@@ -11,12 +13,15 @@ import {
 import { createRateLimiter } from "./middleware/rateLimit.js";
 import { createOriginCheck } from "./middleware/originCheck.js";
 import { errorHandler, notFoundHandler } from "./middleware/errorHandler.js";
-import { OpenAIAnalyzer } from "./services/openaiAnalyzer.js";
+import { AiAnalyzer } from "./services/openaiAnalyzer.js";
+import { resolveProvider } from "./services/aiProviders.js";
 import { logger } from "./lib/logger.js";
 
 interface Env {
   PORT: string;
+  AI_PROVIDER: string;
   AI_API_KEY: string;
+  AI_BASE_URL: string;
   AI_MODEL: string;
   ALLOWED_EXTENSION_ORIGINS: string;
   RATE_LIMIT_MAX: string;
@@ -26,8 +31,10 @@ interface Env {
 function loadEnv(): Env {
   const env: Env = {
     PORT: process.env["PORT"] ?? "8787",
+    AI_PROVIDER: process.env["AI_PROVIDER"] ?? "",
     AI_API_KEY: process.env["AI_API_KEY"] ?? "",
-    AI_MODEL: process.env["AI_MODEL"] ?? "gpt-4o-mini",
+    AI_BASE_URL: process.env["AI_BASE_URL"] ?? "",
+    AI_MODEL: process.env["AI_MODEL"] ?? "",
     ALLOWED_EXTENSION_ORIGINS: process.env["ALLOWED_EXTENSION_ORIGINS"] ?? "",
     RATE_LIMIT_MAX: process.env["RATE_LIMIT_MAX"] ?? "20",
     RATE_LIMIT_WINDOW_MINUTES: process.env["RATE_LIMIT_WINDOW_MINUTES"] ?? "15",
@@ -61,9 +68,27 @@ function createApp(env: Env): express.Express {
     ),
   );
 
-  const analyzer = new OpenAIAnalyzer({
-    apiKey: env.AI_API_KEY,
-    model: env.AI_MODEL,
+  const resolved = resolveProvider({
+    AI_PROVIDER: env.AI_PROVIDER,
+    AI_API_KEY: env.AI_API_KEY,
+    AI_BASE_URL: env.AI_BASE_URL,
+    AI_MODEL: env.AI_MODEL,
+  });
+
+  logger.info(
+    {
+      provider: resolved.provider.id,
+      model: resolved.model,
+      baseUrl: resolved.baseUrl,
+    },
+    "AI analyzer configured",
+  );
+
+  const analyzer = new AiAnalyzer({
+    provider: resolved.provider.id,
+    apiKey: resolved.apiKey,
+    baseUrl: resolved.baseUrl,
+    model: resolved.model,
   });
 
   app.use(createHealthRouter());
@@ -73,6 +98,24 @@ function createApp(env: Env): express.Express {
   app.use(errorHandler);
 
   return app;
+}
+
+// Load .env relative to this file (server/dist at runtime), not the process
+// CWD, so the server works whether started from the repo root, server/, or a
+// container. In dev (tsx runs src/), this resolves to server/../.env fallback.
+const here = path.dirname(fileURLToPath(import.meta.url));
+const candidates = [
+  path.resolve(here, "../.env"), // dist/index.js -> server/.env
+  path.resolve(here, "../../server/.env"), // repo-root start -> server/.env
+  path.resolve(here, "../../.env"), // src/index.ts via tsx -> server/.env
+];
+for (const candidate of candidates) {
+  const result = loadDotenv({ path: candidate });
+  if (!result.error) break;
+  const code = (result.error as NodeJS.ErrnoException).code;
+  if (code !== "ENOENT") {
+    logger.warn({ err: result.error }, "Failed to load .env file");
+  }
 }
 
 const env = loadEnv();

@@ -11,12 +11,13 @@ Chrome Extension (extension/dist)          Backend (server/)
 ├── Rule engine (local, always on)   ───►  /api/threat-lookup
 ├── Bundled local threat feed              ├── OpenPhish feed (auto-refreshed)
 └── Optional AI analysis            ───►  /api/analyze
-                                          └── OpenAI API (key stays here)
+                                          └── Any OpenAI-compatible API
 ```
 
 The extension works without the backend. With it, you get:
+
 - **OpenPhish feed** — millions of live phishing URLs, refreshed every 30 minutes
-- **AI analysis** — GPT-based signal correlation with your key kept server-side
+- **AI analysis** — provider-agnostic; works with OpenAI, Azure, Groq, Together, OpenRouter, Mistral, Fireworks, Ollama, or any OpenAI-compatible endpoint (key stays server-side)
 
 ---
 
@@ -35,8 +36,9 @@ The extension works without the backend. With it, you get:
 5. Environment variables:
    ```
    NODE_ENV=production
-   AI_API_KEY=sk-proj-...        # your OpenAI key
-   AI_MODEL=gpt-4o-mini
+   AI_PROVIDER=openai              # openai | azure | groq | together | openrouter | mistral | fireworks | ollama | custom
+   AI_API_KEY=sk-proj-...          # your key for that provider
+   AI_MODEL=gpt-4o-mini            # leave blank to use the provider's default
    ALLOWED_EXTENSION_ORIGINS=chrome-extension://<YOUR_EXTENSION_ID>
    RATE_LIMIT_MAX=60
    RATE_LIMIT_WINDOW_MINUTES=15
@@ -57,6 +59,77 @@ railway init
 railway up
 # Then set env vars in the Railway dashboard (same list as above).
 ```
+
+### AI provider configuration
+
+The `/api/analyze` endpoint speaks the **OpenAI Chat Completions** protocol, so it works with OpenAI and with any provider that exposes an OpenAI-compatible API. Pick a provider with `AI_PROVIDER` and the server fills in the base URL and default model for you.
+
+| `AI_PROVIDER` | Base URL                                            | Default model                        | API key env          |
+| ------------- | --------------------------------------------------- | ------------------------------------ | -------------------- |
+| `openai`      | `https://api.openai.com/v1`                         | `gpt-4o-mini`                        | `AI_API_KEY`         |
+| `azure`       | _you provide_ (your deployment endpoint)           | _required_ (your deployment name)    | `AI_API_KEY`         |
+| `groq`        | `https://api.groq.com/openai/v1`                    | `llama-3.1-70b-versatile`            | `AI_API_KEY`         |
+| `together`    | `https://api.together.xyz/v1`                       | `meta-llama/Meta-Llama-3.1-70B-Instruct-Turbo` | `AI_API_KEY` |
+| `openrouter`  | `https://openrouter.ai/api/v1`                      | `anthropic/claude-3.5-sonnet`        | `AI_API_KEY`         |
+| `mistral`     | `https://api.mistral.ai/v1`                         | `mistral-small-latest`               | `AI_API_KEY`         |
+| `fireworks`   | `https://api.fireworks.ai/inference/v1`             | `accounts/fireworks/models/llama-v3p1-70b-instruct` | `AI_API_KEY` |
+| `ollama`      | `http://localhost:11434/v1`                         | `llama3.1`                           | `AI_API_KEY=ollama` (any value) |
+| `custom`      | _you provide_ (`AI_BASE_URL`)                       | _required_ (`AI_MODEL`)              | `AI_API_KEY`         |
+
+#### Examples
+
+OpenAI (default — what the codebase used to hardcode):
+```env
+AI_PROVIDER=openai
+AI_API_KEY=sk-proj-...
+AI_MODEL=gpt-4o-mini
+```
+
+Groq (very fast Llama inference, generous free tier):
+```env
+AI_PROVIDER=groq
+AI_API_KEY=gsk_...
+AI_MODEL=llama-3.1-70b-versatile
+```
+
+OpenRouter (one key, hundreds of models):
+```env
+AI_PROVIDER=openrouter
+AI_API_KEY=sk-or-...
+AI_MODEL=anthropic/claude-3.5-sonnet
+```
+
+Azure OpenAI (use your full deployment URL as `AI_BASE_URL`):
+```env
+AI_PROVIDER=azure
+AI_API_KEY=<your-azure-key>
+AI_BASE_URL=https://<resource>.openai.azure.com/openai/deployments/<deployment>
+AI_MODEL=<deployment-name>
+```
+
+Ollama (fully local, no key needed):
+```env
+AI_PROVIDER=ollama
+AI_API_KEY=ollama
+AI_MODEL=llama3.1
+```
+
+LM Studio or any other OpenAI-compatible endpoint (point at it directly):
+```env
+AI_PROVIDER=custom
+AI_BASE_URL=http://localhost:1234/v1
+AI_API_KEY=lm-studio
+AI_MODEL=local-model
+```
+
+> You can also leave `AI_PROVIDER` blank and just set `AI_BASE_URL` + `AI_MODEL` + `AI_API_KEY` — the server treats that the same as `AI_PROVIDER=custom`. This is the easiest way to point at a new provider without editing the registry.
+
+Notes:
+- Some providers (Ollama, LM Studio, vLLM, custom proxies) don't support OpenAI's `response_format: { type: "json_object" }`. ScamShield automatically detects those and falls back to free-form completions, then strips any ```` ```json ```` wrappers from the response.
+- Model names change often. If a provider ships a new default, just override `AI_MODEL` — you don't need to redeploy code.
+- Keep `AI_API_KEY` server-side only. The extension never sees it.
+
+---
 
 ### Option C: Docker (any VPS)
 
@@ -137,6 +210,7 @@ Compress-Archive -Path extension\dist\* -DestinationPath scamshield-v1.0.0.zip
 ```
 
 Submit at [chrome.google.com/webstore/devconsole](https://chrome.google.com/webstore/devconsole) ($5 one-time fee):
+
 - Upload the zip
 - Privacy policy URL: `https://github.com/Ahasasjain/Scam-Shield/blob/main/PRIVACY.md`
 - Permissions justification:
@@ -154,8 +228,8 @@ Review typically takes 1–3 days for low-permission extensions.
 
 The backend auto-downloads the OpenPhish Community Feed every 30 minutes.
 
-| Env var | Default | Notes |
-|---|---|---|
+| Env var           | Default                          | Notes                       |
+| ----------------- | -------------------------------- | --------------------------- |
 | `THREAT_FEED_URL` | `https://openphish.com/feed.txt` | Swap for a premium feed URL |
 
 **Licensing:** OpenPhish Community is free for **non-commercial use only**. For a commercial product, either buy an OpenPhish Premium license or switch `THREAT_FEED_URL` to a licensed provider (PhishTank requires attribution; URLhaus is MPL-2.0 and commercial-friendly).
@@ -200,10 +274,10 @@ Extension version bumps go in `extension/public/manifest.json` and `extension/pa
 
 ## Troubleshooting
 
-| Symptom | Fix |
-|---|---|
-| "Threat intelligence unavailable" persists | Backend down or URL wrong — check `/api/health`; check browser console of the service worker |
-| AI card says unavailable | `AI_API_KEY` missing/invalid on backend; check backend logs |
-| CORS errors in service worker console | `ALLOWED_EXTENSION_ORIGINS` doesn't match your extension ID |
-| Feed empty (`entryCount: 0`) | Network egress blocked from host, or OpenPhish rate-limited — logs show `threat feed refresh failed` |
-| Auto-scan not firing | Reload extension after update; settings migration applies once per version bump |
+| Symptom                                    | Fix                                                                                                  |
+| ------------------------------------------ | ---------------------------------------------------------------------------------------------------- |
+| "Threat intelligence unavailable" persists | Backend down or URL wrong — check `/api/health`; check browser console of the service worker         |
+| AI card says unavailable                   | `AI_API_KEY` missing/invalid on backend; check backend logs (also verify `AI_PROVIDER` + `AI_BASE_URL` for non-OpenAI providers) |
+| CORS errors in service worker console      | `ALLOWED_EXTENSION_ORIGINS` doesn't match your extension ID                                          |
+| Feed empty (`entryCount: 0`)               | Network egress blocked from host, or OpenPhish rate-limited — logs show `threat feed refresh failed` |
+| Auto-scan not firing                       | Reload extension after update; settings migration applies once per version bump                      |

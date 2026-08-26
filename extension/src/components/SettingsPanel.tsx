@@ -10,11 +10,7 @@ interface SettingsPanelProps {
 const THEMES: ThemeSetting[] = ["light", "dark", "system"];
 
 /** Settings (spec §25) — honest privacy explanation, no overclaiming. */
-export function SettingsPanel({
-  settings,
-  onUpdate,
-  onReset,
-}: SettingsPanelProps) {
+export function SettingsPanel({ settings, onUpdate, onReset }: SettingsPanelProps) {
   return (
     <div className="space-y-3">
       <AIModeToggle
@@ -69,8 +65,8 @@ export function SettingsPanel({
 
       {settings.aiEnabled && (
         <div className="rounded-xl border border-violet-200 bg-violet-50/60 px-3 py-2.5 text-[11px] leading-relaxed text-violet-800 dark:border-violet-900 dark:bg-violet-950/40 dark:text-violet-300">
-          AI analysis runs through the official ScamShield API. Only minimal
-          security signals are sent — never page contents or credentials.
+          AI analysis runs through the official ScamShield API. Only minimal security
+          signals are sent — never page contents or credentials.
         </div>
       )}
 
@@ -82,8 +78,8 @@ export function SettingsPanel({
           ScamShield stores scan history and settings only on this device. With AI off,
           nothing leaves your browser except the threat-feed check (only the site's
           domain is queried). With AI on, only minimal security signals (URL structure,
-          page signal counts) are sent to the ScamShield API — never passwords,
-          cookies, tokens, or full page contents.
+          page signal counts) are sent to the ScamShield API — never passwords, cookies,
+          tokens, or full page contents.
         </p>
       </section>
 

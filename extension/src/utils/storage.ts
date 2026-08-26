@@ -108,9 +108,7 @@ export async function getAiBaseUrl(): Promise<string> {
   const result = await storage().get(AI_BASE_URL_KEY);
   const value = result[AI_BASE_URL_KEY];
   if (typeof value === "string" && value !== "") return value;
-  return typeof __SCAMSHIELD_API_URL__ === "string"
-    ? __SCAMSHIELD_API_URL__
-    : "";
+  return typeof __SCAMSHIELD_API_URL__ === "string" ? __SCAMSHIELD_API_URL__ : "";
 }
 
 export async function setAiBaseUrl(url: string): Promise<void> {

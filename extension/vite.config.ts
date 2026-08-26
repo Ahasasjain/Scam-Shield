@@ -50,9 +50,7 @@ export default defineConfig(() => ({
   define: {
     // Baked at build time — end users never configure an API endpoint.
     // Set SCAMSHIELD_API_URL when building for production.
-    __SCAMSHIELD_API_URL__: JSON.stringify(
-      process.env.SCAMSHIELD_API_URL ?? "",
-    ),
+    __SCAMSHIELD_API_URL__: JSON.stringify(process.env.SCAMSHIELD_API_URL ?? ""),
   },
   resolve: {
     alias: {

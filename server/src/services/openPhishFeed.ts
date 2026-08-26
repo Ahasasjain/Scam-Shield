@@ -25,7 +25,12 @@ interface FeedData {
   entryCount: number;
 }
 
-let feed: FeedData = { urls: new Set(), hosts: new Set(), lastUpdated: 0, entryCount: 0 };
+let feed: FeedData = {
+  urls: new Set(),
+  hosts: new Set(),
+  lastUpdated: 0,
+  entryCount: 0,
+};
 let refreshTimer: NodeJS.Timeout | null = null;
 
 export function getFeed(): FeedData {
