@@ -15,6 +15,40 @@ export interface CorrelationInput {
   threatMatch?: { available: boolean; matched: boolean };
 }
 
+/**
+ * Signals strong enough to escalate an allowlisted official domain on their own.
+ *
+ * Spec §4 / §11 / §21 rule 8: weak structural evidence and a plain login form
+ * are SUPPORTING evidence, never decisive. Real-world false positives proved
+ * why: an Amazon OpenID sign-in URL is ~380 characters and percent-encoded by
+ * design, so "excessive URL length" + "URL encoding abuse" + "login form"
+ * summed past the SUSPICIOUS band on amazon.in — an allowlisted official
+ * domain. Long URLs and percent-encoding are likewise routine on YouTube,
+ * Google search, and any redirect-based login flow.
+ *
+ * A domain on the brand allowlist therefore cannot be escalated above
+ * LOW_RISK by structural noise alone. Genuine danger on an "official" domain
+ * still escalates, because it arrives via one of these ids.
+ */
+const SUBSTANTIVE_FACTOR_IDS: ReadonlySet<string> = new Set([
+  "threat-intel-match",
+  "page-cross-origin-credentials",
+  "page-payment-cross-origin",
+  "page-offdomain-sensitive-submit",
+  // OTP and CVV are never collected in a legitimate browser form (spec §3).
+  "page-otp-collection",
+  "page-cvv-collection",
+  "corr-impersonation-otp",
+  "corr-upi-refund-scam",
+  "corr-unknown-credentials-pressure",
+]);
+
+/**
+ * A score at or above this means at most weak supporting signals fired, so an
+ * official domain with no substantive evidence can still reach SAFE.
+ */
+const OFFICIAL_CLEAN_SCORE = 90;
+
 export function evaluateCorrelations(
   factors: RiskFactor[],
   input: CorrelationInput,
@@ -22,7 +56,19 @@ export function evaluateCorrelations(
   const bonuses: RiskFactor[] = [];
   const ids = new Set(factors.map((f) => f.id));
 
-  const hasCredentialForm = ids.has("page-login-form") || ids.has("page-payment-form");
+  // §3: a page that asks for an OTP, a CVV, or banking credentials is
+  // collecting high-value secrets regardless of whether it is a "login form".
+  const hasSensitiveCollection =
+    ids.has("page-login-form") ||
+    ids.has("page-payment-form") ||
+    ids.has("page-otp-collection") ||
+    ids.has("page-cvv-collection") ||
+    ids.has("page-banking-credentials");
+  const hasCredentialForm = hasSensitiveCollection;
+  const hasPaymentForm =
+    ids.has("page-payment-form") ||
+    ids.has("page-cvv-collection") ||
+    ids.has("page-upi-collection");
   const hasUrgency = ids.has("page-urgency-language");
   const hasFakeWarning = ids.has("page-fake-warnings");
   const hasGiveaway = ids.has("page-giveaway-patterns");
@@ -131,6 +177,39 @@ export function evaluateCorrelations(
     });
   }
 
+  // §3: OTP + any impersonation is a critical combination. Services ask users
+  // to type OTPs into native apps, never into a browser form on a
+  // brand-impersonating site.
+  if (ids.has("page-otp-collection") && strongImpersonation) {
+    bonuses.push({
+      id: "corr-impersonation-otp",
+      title: "Impersonation combined with an OTP request",
+      description:
+        "The page imitates a known brand and asks for a one-time password. Legitimate services never collect OTPs through a web form.",
+      severity: "critical",
+      points: 22,
+      source: "rule",
+    });
+  }
+
+  // §3/§14: India-specific payment-scam cluster — UPI/KYC language plus a
+  // payment form on an unknown domain.
+  const upiScam =
+    (ids.has("page-upi-collection") || ids.has("page-fake-verification")) &&
+    hasPaymentForm &&
+    isUnrelatedOrWorse;
+  if (upiScam) {
+    bonuses.push({
+      id: "corr-upi-refund-scam",
+      title: "Payment or KYC scam pattern",
+      description:
+        "An unrecognized site combines UPI or fake-KYC verification language with a payment form — a common refund-fraud pattern.",
+      severity: "high",
+      points: 20,
+      source: "rule",
+    });
+  }
+
   return bonuses;
 }
 
@@ -154,9 +233,9 @@ export function deriveVerdict(input: VerdictInput): RiskVerdict {
   // §6: confirmed threat intel overrides everything.
   if (threatMatch?.available && threatMatch.matched) {
     if (threatMatch.confidence === "confirmed" || threatMatch.confidence === "high") {
-      return "dangerous";
+      return "DANGEROUS";
     }
-    return "high_risk";
+    return "HIGH_RISK";
   }
 
   const ids = new Set(factorIds ?? []);
@@ -165,13 +244,27 @@ export function deriveVerdict(input: VerdictInput): RiskVerdict {
 
   // Evidence-based escalations independent of arithmetic score.
   if (ids.has("page-cross-origin-credentials")) {
-    return score <= 49 ? "dangerous" : "high_risk";
+    return score <= 49 ? "DANGEROUS" : "HIGH_RISK";
+  }
+
+  // §3: credentials or payment details leaving for an unrelated registrable
+  // domain is a deterministic, hard-to-explain-away pattern.
+  if (ids.has("page-offdomain-sensitive-submit")) {
+    return score <= 49 ? "DANGEROUS" : "HIGH_RISK";
+  }
+
+  // §3: an OTP request is a high-severity signal on its own, but only
+  // escalates to HIGH_RISK when the page is not an official destination.
+  if (ids.has("page-otp-collection") && !official) {
+    return score <= 49 ? "DANGEROUS" : "HIGH_RISK";
   }
 
   if (relationship === "lookalike" || relationship === "brand-in-subdomain") {
-    if (score <= 49) return "dangerous";
-    return "suspicious";
+    if (score <= 49) return "DANGEROUS";
+    return "SUSPICIOUS";
   }
+
+  if (ids.has("url-explicit-phishing-name")) return "SUSPICIOUS";
 
   // Generic phishing pattern: unknown domain + credentials + pressure signals
   // (correlation bonuses present) → at least suspicious even at high scores.
@@ -180,16 +273,41 @@ export function deriveVerdict(input: VerdictInput): RiskVerdict {
       ids.has("corr-weak-url-credentials")) &&
     (ids.has("page-login-form") || ids.has("page-payment-form"));
   if (genericPhishing && score <= 84) {
-    return "suspicious";
+    return "SUSPICIOUS";
   }
 
-  if (score <= 29) return "dangerous";
-  if (score <= 49) return "high_risk";
-  if (score <= 69) return "suspicious";
+  // An allowlisted official domain with only weak structural evidence can
+  // never be escalated by arithmetic. Official-brand domains legitimately
+  // produce long, percent-encoded, parameter-heavy URLs (Amazon OpenID
+  // sign-in, Google search, YouTube playlists) and legitimately contain login
+  // forms and billing fields. Requiring substantive evidence here is what
+  // keeps spec §21 rule 8 (minimise false positives) honest.
+  const hasSubstantiveEvidence = [...ids].some((id) =>
+    SUBSTANTIVE_FACTOR_IDS.has(id),
+  );
+  if (official && !hasSubstantiveEvidence && score < OFFICIAL_CLEAN_SCORE) {
+    // Structural noise on an allowlisted domain: real, but never enough on its
+    // own. Falls back to LOW_RISK (or UNKNOWN when the page was not analysed)
+    // instead of being allowed into the SUSPICIOUS band.
+    return pageAnalyzed ? "LOW_RISK" : "UNKNOWN";
+  }
 
-  // High scores: official domains are known_safe; everything else depends
-  // on coverage — insufficient evidence is UNKNOWN, never safe (§3).
-  if (official) return "known_safe";
-  if (!pageAnalyzed) return "unknown";
-  return "low_risk";
+  if (score <= 29) return "DANGEROUS";
+  if (score <= 49) return "HIGH_RISK";
+  if (score <= 69) return "SUSPICIOUS";
+
+  // A provider no-match means no known threat, not proof of safety. Keep SAFE
+  // reserved for an official domain when threat intelligence is unavailable
+  // only because this scan has no provider configured; a clean provider
+  // response remains LOW_RISK.
+  //
+  // SAFE additionally requires a near-clean score. Being on an official domain
+  // does not make an active finding disappear: an official-looking page that
+  // still asks for an OTP has real indicators, so it must not render as
+  // "Verified safe". A score of 90+ means at most weak supporting signals.
+  if (official && threatMatch?.status !== "NO_KNOWN_THREAT" && score >= 90) {
+    return "SAFE";
+  }
+  if (!pageAnalyzed) return "UNKNOWN";
+  return "LOW_RISK";
 }

@@ -1,7 +1,12 @@
 import { useCallback, useEffect, useState } from "react";
 import type { ExtensionSettings, HistoryEntry, ThemeSetting } from "@shared/index";
 import { getSettings as fetchSettings } from "@/services/api/securityApi";
-import { getHistory, saveSettings, clearHistory } from "@/utils/storage";
+import {
+  clearHistory,
+  getHistory,
+  getSettings as readLocalSettings,
+  saveSettings,
+} from "@/utils/storage";
 
 /** Loads settings once and exposes an update function. */
 export function useSettings(): {
@@ -12,8 +17,23 @@ export function useSettings(): {
   const [settings, setSettings] = useState<ExtensionSettings | null>(null);
 
   const reload = useCallback(async () => {
-    const response = await fetchSettings();
-    if (response.ok) setSettings(response.data);
+    // The background worker is the primary source, but it may be unreachable
+    // (worker killed, context invalidated). Fall back to a direct local read —
+    // it is the same backing store — so the settings tab never stays blank.
+    try {
+      const response = await fetchSettings();
+      if (response.ok) {
+        setSettings(response.data);
+        return;
+      }
+    } catch {
+      // Fall through to the local read below.
+    }
+    try {
+      setSettings(await readLocalSettings());
+    } catch {
+      // Keep the previous settings on screen rather than blanking the UI.
+    }
   }, []);
 
   useEffect(() => {
@@ -21,7 +41,12 @@ export function useSettings(): {
   }, [reload]);
 
   const update = useCallback(async (patch: Partial<ExtensionSettings>) => {
-    setSettings(await saveSettings(patch));
+    try {
+      setSettings(await saveSettings(patch));
+    } catch {
+      // Callers already guard with try/catch; the hook keeps the last known
+      // settings rather than surfacing a storage failure as a crash.
+    }
   }, []);
 
   return { settings, update, reload };
@@ -31,12 +56,20 @@ export function useHistory() {
   const [history, setHistory] = useState<HistoryEntry[]>([]);
 
   const refresh = useCallback(async () => {
-    setHistory(await getHistory());
+    try {
+      setHistory(await getHistory());
+    } catch {
+      // Keep the previous list rather than blanking on a storage failure.
+    }
   }, []);
 
   const clear = useCallback(async () => {
-    await clearHistory();
-    setHistory([]);
+    try {
+      await clearHistory();
+      setHistory([]);
+    } catch {
+      // Keep the visible list if the clear failed.
+    }
   }, []);
 
   useEffect(() => {

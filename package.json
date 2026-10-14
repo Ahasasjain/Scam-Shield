@@ -2,6 +2,7 @@
   "name": "scamshield",
   "version": "1.0.0",
   "private": true,
+  "type": "module",
   "description": "ScamShield — production-ready Chrome extension for scam and phishing website detection with a Node.js + Express AI backend.",
   "license": "MIT",
   "packageManager": "pnpm@9.12.0",

@@ -1,10 +1,10 @@
 import axios, {
-  AxiosError,
+  type AxiosError,
   type AxiosInstance,
   type AxiosResponse,
   type InternalAxiosRequestConfig,
 } from "axios";
-import { z } from "zod";
+import { type ZodType } from "zod";
 
 /**
  * Shared axios HTTP client factory (industry-standard patterns):
@@ -20,6 +20,7 @@ export type ApiErrorCode =
   | "timeout"
   | "rate_limited"
   | "unauthorized"
+  | "upstream_error"
   | "server_error"
   | "invalid_response";
 
@@ -115,7 +116,7 @@ export function toApiClientError(error: unknown): ApiClientError {
  * Validates an API success envelope at runtime before it reaches callers.
  * Never trust the network layer (spec §16).
  */
-export function parseEnvelope<T>(schema: z.ZodType<T>, data: unknown): T {
+export function parseEnvelope<T>(schema: ZodType<T>, data: unknown): T {
   const parsed = schema.safeParse(data);
   if (!parsed.success) {
     throw new ApiClientError("invalid_response", "Response failed schema validation.");

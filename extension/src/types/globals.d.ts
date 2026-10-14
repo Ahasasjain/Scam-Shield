@@ -4,3 +4,4 @@
  * building for production — end users never configure an endpoint.
  */
 declare const __SCAMSHIELD_API_URL__: string;
+declare const __SCAMSHIELD_AI_ALWAYS_RUN__: boolean;

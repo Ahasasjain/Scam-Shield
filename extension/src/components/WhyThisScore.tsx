@@ -15,20 +15,20 @@ export function WhyThisScore({ breakdown }: WhyThisScoreProps) {
   }
 
   return (
-    <ul className="space-y-1.5" aria-label="Score contribution by category">
+    <ul className="space-y-2" aria-label="Score contribution by category">
       {breakdown.map((entry) => (
-        <li key={entry.category} className="flex items-center justify-between gap-2">
-          <span className="text-xs text-neutral-600 dark:text-neutral-400">
+        <li key={entry.category} className="flex items-center justify-between gap-3">
+          <span className="text-xs text-slate-500 dark:text-slate-400">
             {entry.label}
           </span>
-          <span className="flex items-center gap-2">
-            <span className="h-1.5 w-20 overflow-hidden rounded-full bg-neutral-200 dark:bg-neutral-800">
+          <span className="flex shrink-0 items-center gap-2">
+            <span className="h-1.5 w-20 overflow-hidden rounded-full bg-slate-200 dark:bg-white/10">
               <span
-                className="block h-full rounded-full bg-risk-medium"
+                className="block h-full rounded-full bg-gradient-to-r from-amber-400 to-orange-500"
                 style={{ width: `${Math.min(100, entry.points)}%` }}
               />
             </span>
-            <span className="w-10 text-right text-xs font-semibold tabular-nums text-neutral-700 dark:text-neutral-300">
+            <span className="w-10 text-right text-xs font-bold tabular-nums text-slate-600 dark:text-slate-300">
               −{entry.points}
             </span>
           </span>

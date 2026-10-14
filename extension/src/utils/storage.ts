@@ -39,17 +39,11 @@ export async function getSettings(): Promise<ExtensionSettings> {
   const raw = stored as Record<string, unknown>;
 
   // Migration: v1 stored autoScan=false as an explicit user choice even
-  // though it was merely the old default. v2 applies the new default once.
-  const autoScanDefault =
-    storedVersion < CURRENT_SETTINGS_VERSION
-      ? DEFAULT_SETTINGS.autoScan
-      : DEFAULT_SETTINGS.autoScan;
+  // though it was merely the old default. v2 applies the new default once
+  // to profiles that never made an explicit choice under v2 or later.
+  const autoScanDefault = DEFAULT_SETTINGS.autoScan;
 
   return {
-    aiEnabled:
-      typeof raw["aiEnabled"] === "boolean"
-        ? raw["aiEnabled"]
-        : DEFAULT_SETTINGS.aiEnabled,
     autoScan:
       typeof raw["autoScan"] === "boolean" && storedVersion >= CURRENT_SETTINGS_VERSION
         ? raw["autoScan"]
@@ -74,22 +68,41 @@ export async function saveSettings(
 }
 
 export async function resetSettings(): Promise<ExtensionSettings> {
-  await storage().set({ [SETTINGS_KEY]: { ...DEFAULT_SETTINGS } });
+  // The version key must be written too: without it the next getSettings()
+  // believes the profile predates v2 and re-applies the migration path.
+  await storage().set({
+    [SETTINGS_KEY]: { ...DEFAULT_SETTINGS },
+    [SETTINGS_VERSION_KEY]: CURRENT_SETTINGS_VERSION,
+  });
   return { ...DEFAULT_SETTINGS };
+}
+
+function isFiniteNumber(value: unknown): value is number {
+  return typeof value === "number" && Number.isFinite(value);
+}
+
+function isBoundedString(value: unknown, maxLength: number): value is string {
+  return typeof value === "string" && value.length <= maxLength;
 }
 
 export async function getHistory(): Promise<HistoryEntry[]> {
   const result = await storage().get(HISTORY_KEY);
   const stored = result[HISTORY_KEY];
   if (!Array.isArray(stored)) return [];
-  return stored.filter(
-    (entry): entry is HistoryEntry =>
-      typeof entry === "object" &&
-      entry !== null &&
-      typeof (entry as HistoryEntry).hostname === "string" &&
-      typeof (entry as HistoryEntry).score === "number" &&
-      typeof (entry as HistoryEntry).scannedAt === "number",
-  );
+  // Corrupt entries (extension bug, failed migration, edited storage) must
+  // never reach the timeline: unbounded strings bloat the popup and NaN
+  // scores break sorting and display.
+  return stored.filter((entry): entry is HistoryEntry => {
+    if (typeof entry !== "object" || entry === null) return false;
+    const candidate = entry as Record<string, unknown>;
+    return (
+      (typeof candidate["url"] === "undefined" ||
+        isBoundedString(candidate["url"], 2000)) &&
+      isBoundedString(candidate["hostname"], 253) &&
+      isFiniteNumber(candidate["score"]) &&
+      isFiniteNumber(candidate["scannedAt"])
+    );
+  });
 }
 
 export async function addHistoryEntry(entry: HistoryEntry): Promise<void> {

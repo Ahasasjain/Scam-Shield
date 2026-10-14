@@ -8,10 +8,10 @@ export function ScanProgress({ step }: ScanProgressProps) {
     <div
       role="status"
       aria-live="polite"
-      className="flex flex-col items-center gap-3 py-8"
+      className="flex min-h-[220px] flex-col items-center justify-center gap-3 rounded-2xl border border-slate-200/80 bg-white py-8 shadow-sm dark:border-white/10 dark:bg-white/5"
     >
-      <div className="h-8 w-8 animate-spin rounded-full border-[3px] border-neutral-200 border-t-shield-500 dark:border-neutral-800 dark:border-t-shield-500" />
-      <p className="text-sm text-neutral-600 dark:text-neutral-400">{step}…</p>
+      <div className="h-8 w-8 animate-spin rounded-full border-[3px] border-slate-200 border-t-emerald-500 dark:border-white/10 dark:border-t-emerald-400" />
+      <p className="text-sm font-medium tabular-nums text-slate-500 dark:text-slate-400">{step}…</p>
     </div>
   );
 }

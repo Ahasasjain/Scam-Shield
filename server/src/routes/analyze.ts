@@ -1,6 +1,6 @@
 import { Router } from "express";
 import { analyzeRequestSchema } from "@scamshield/shared";
-import { OpenAIAnalyzer } from "../services/openaiAnalyzer.js";
+import { type GroqAnalyzer } from "../services/groqAnalyzer.js";
 import { ApiError } from "../middleware/errorHandler.js";
 
 /**
@@ -8,7 +8,7 @@ import { ApiError } from "../middleware/errorHandler.js";
  * through the analyzer service, and returns a schema-validated result
  * (spec §14–§17, §33).
  */
-export function createAnalyzeRouter(analyzer: OpenAIAnalyzer): Router {
+export function createAnalyzeRouter(analyzer: GroqAnalyzer): Router {
   const router = Router();
 
   router.post("/api/analyze", (req, res, next) => {

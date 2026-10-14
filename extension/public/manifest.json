@@ -27,6 +27,7 @@
     "type": "module"
   },
   "permissions": ["activeTab", "scripting", "storage", "sidePanel"],
+  "host_permissions": ["http://*/*", "https://*/*"],
   "optional_permissions": ["webNavigation"],
   "content_security_policy": {
     "extension_pages": "script-src 'self'; object-src 'self'"

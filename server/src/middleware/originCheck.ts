@@ -35,7 +35,18 @@ export function createOriginCheck(allowedOrigins: string[]): RequestHandler {
     res.setHeader("Access-Control-Allow-Origin", origin);
     res.setHeader("Vary", "Origin");
     res.setHeader("Access-Control-Allow-Methods", "POST, OPTIONS");
-    res.setHeader("Access-Control-Allow-Headers", "Content-Type");
+    res.setHeader(
+      "Access-Control-Allow-Headers",
+      "Content-Type, X-Request-Id, X-ScamShield-Client",
+    );
+
+    // Answer CORS preflights here: the routers only define POST, so without
+    // this an OPTIONS request falls through to the 404 handler (which carries
+    // no CORS headers) and non-extension clients fail the preflight.
+    if (req.method === "OPTIONS") {
+      res.status(204).end();
+      return;
+    }
     next();
   };
 }

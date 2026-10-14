@@ -1,12 +1,21 @@
 import { z } from "zod";
+import type { RiskVerdict } from "./risk.js";
+import type {
+  AnalysisMode,
+  DetectionCoverageV2,
+  Evidence,
+  EvidenceConfidence,
+  SafeBrowsingStatus,
+} from "./evidence.js";
 
 export * from "./risk.js";
+export * from "./evidence.js";
 
 /**
  * Zod schemas for every trust boundary:
  * - extension → server (`analyzeRequestSchema`)
  * - server → extension (`aiAnalysisResponseSchema`)
- * - server → OpenAI (prompt output validated with `aiAnalysisResponseSchema`)
+ * - server → Groq (response output validated before it reaches the extension)
  *
  * Types are inferred from schemas so runtime validation and compile-time
  * types can never drift apart.
@@ -38,6 +47,39 @@ export const pageSignalsSchema = z.object({
   giveawayPatterns: z.number().int().nonnegative(),
   fakeSecurityWarnings: z.number().int().nonnegative(),
   externalScriptOrigins: z.array(z.string()).max(50),
+  formActions: z
+    .array(
+      z.object({
+        actionOrigin: z.string().nullable(),
+        isCrossOrigin: z.boolean(),
+        containsPassword: z.boolean(),
+        containsPaymentFields: z.boolean(),
+        /** §3 sensitive categories collected by this form. */
+        kinds: z.array(z.string().max(32)).max(10).optional(),
+      }),
+    )
+    .max(20)
+    .optional(),
+  /** §3: union of sensitive categories present anywhere on the page. */
+  sensitiveKinds: z.array(z.string().max(32)).max(10).optional(),
+  crossOriginSensitiveForms: z.number().int().nonnegative().optional(),
+  offDomainSensitiveForms: z.number().int().nonnegative().optional(),
+  suspiciousDownloadCount: z.number().int().nonnegative().optional(),
+});
+
+export const domainIdentitySchema = z.object({
+  registrableDomain: z.string().nullable(),
+  relationship: z.enum([
+    "official",
+    "trusted-subdomain",
+    "brand-in-subdomain",
+    "lookalike",
+    "brand-in-path",
+    "unrelated",
+  ]),
+  detectedBrand: z.string().optional(),
+  matchedOfficialDomain: z.string().optional(),
+  similarity: z.number().min(0).max(1).optional(),
 });
 
 export const redirectSignalsSchema = z.object({
@@ -46,11 +88,18 @@ export const redirectSignalsSchema = z.object({
   finalUrl: z.string(),
 });
 
-export const domainSignalsSchema = z.object({
-  /** Domain intelligence is not available in V1 — always reported honestly. */
-  available: z.literal(false),
-  reason: z.string(),
-});
+export const domainSignalsSchema = z.discriminatedUnion("available", [
+  z.object({
+    available: z.literal(true),
+    domainAgeDays: z.number().int().nonnegative().optional(),
+    registrar: z.string().nullable().optional(),
+    source: z.literal("rdap"),
+  }),
+  z.object({
+    available: z.literal(false),
+    reason: z.string(),
+  }),
+]);
 
 export const scanContextSchema = z.object({
   url: z.string().url(),
@@ -58,6 +107,7 @@ export const scanContextSchema = z.object({
   pageSignals: pageSignalsSchema.optional(),
   redirectSignals: redirectSignalsSchema.optional(),
   domainSignals: domainSignalsSchema.optional(),
+  domainIdentity: domainIdentitySchema.optional(),
 });
 
 export type UrlSignals = z.infer<typeof urlSignalsSchema>;
@@ -113,6 +163,7 @@ export const analyzeResponseSchema = z.discriminatedUnion("ok", [
         "timeout",
         "invalid_ai_response",
         "server_error",
+        "not_found",
       ]),
       message: z.string(),
     }),
@@ -127,6 +178,8 @@ export type AnalyzeResponse = z.infer<typeof analyzeResponseSchema>;
 
 export const scanRequestSchema = z.object({
   tabId: z.number().int(),
+  /** Bypass the background scan cache and force a fresh analysis. */
+  force: z.boolean().optional(),
 });
 
 export type ScanRequest = z.infer<typeof scanRequestSchema>;
@@ -134,7 +187,44 @@ export type ScanRequest = z.infer<typeof scanRequestSchema>;
 export type ExtensionMessage =
   | { type: "SCAN_WEBSITE"; payload: ScanRequest }
   | { type: "GET_SETTINGS" }
-  | { type: "UPDATE_AI_MODE"; payload: { enabled: boolean } };
+  | { type: "GET_LAST_SCAN"; payload: ScanRequest }
+  | { type: "PAGE_NAVIGATED"; url: string };
+
+/**
+ * Reuses the verdict the background worker already computed for a tab.
+ *
+ * Spec §17: opening the UI for a meaningful-risk verdict must show the
+ * ALREADY-GENERATED result and must NOT trigger another scan. A second scan
+ * would re-inject the content script, repeat the RDAP and threat-intel
+ * lookups, spend another AI call, and append a duplicate history entry.
+ */
+export interface LastScanPayload {
+  score: number;
+  riskLevel: string;
+  verdict: RiskVerdict;
+  coverage: Record<string, boolean>;
+  coverageV2?: DetectionCoverageV2;
+  factors: unknown[];
+  ai:
+    | { status: "enabled"; result: unknown }
+    | { status: "unavailable"; reason: string }
+    | { status: "disabled" };
+  scannedUrl: string;
+  durationMs: number;
+  confidence?: EvidenceConfidence;
+  analysisMode?: AnalysisMode;
+  safeBrowsingStatus?: SafeBrowsingStatus;
+  evidence?: Evidence[];
+  aiAvailable?: boolean;
+  limitations: string[];
+  breakdown: { category: string; label: string; points: number }[];
+}
+
+export interface ScanRiskStateMessage {
+  type: "SET_SCAN_RISK_STATE";
+  verdict: RiskVerdict;
+  showWarning?: boolean;
+}
 
 export type ScanProgressStep =
   | "validating"
@@ -154,13 +244,21 @@ export interface ScanSuccessPayload {
     | { status: "disabled" };
   scannedUrl: string;
   durationMs: number;
+  // --- Spec §12 structured result -----------------------------------------
+  verdict?: RiskVerdict;
+  confidence?: EvidenceConfidence;
+  analysisMode?: AnalysisMode;
+  safeBrowsingStatus?: SafeBrowsingStatus;
+  evidence?: Evidence[];
+  coverageV2?: DetectionCoverageV2;
 }
 
 export type ScanFailureCode =
   | "unsupported_page"
   | "invalid_url"
   | "scan_failed"
-  | "tab_not_found";
+  | "tab_not_found"
+  | "stale_scan";
 
 export type ExtensionResponse<T> =
   | { ok: true; data: T }
@@ -173,21 +271,33 @@ export type ExtensionResponse<T> =
 export type ThemeSetting = "light" | "dark" | "system";
 
 export interface ExtensionSettings {
-  aiEnabled: boolean;
   autoScan: boolean;
   theme: ThemeSetting;
 }
 
 export const DEFAULT_SETTINGS: ExtensionSettings = {
-  aiEnabled: false,
   autoScan: true,
   theme: "system",
 };
 
 export interface HistoryEntry {
+  /** Full URL for auditability; optional for entries created before this field existed. */
+  url?: string;
   hostname: string;
   score: number;
-  riskLevel: string;
+  /**
+   * Legacy score-band label. Kept for backward compatibility with entries
+   * written before `verdict` existed. NEW WRITES MUST NOT populate this with
+   * a `RiskVerdict` — the two enums are different and mixing them rendered
+   * unstyled badges in the timeline.
+   */
+  riskLevel?: string;
+  /** The authoritative verdict. New entries always set this. */
+  verdict?: RiskVerdict;
+  /** Short evidence titles shown in the security timeline (spec §18). */
+  evidence?: string[];
+  /** Whether this scan used the AI analyst (spec §18). */
+  analysisMode?: AnalysisMode;
   scannedAt: number;
 }
 

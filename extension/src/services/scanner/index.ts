@@ -1,15 +1,21 @@
 import type { RiskFactor } from "@shared/index";
 import { ruleToRiskFactor, type DetectionRule, type ScanContext } from "./ruleEngine";
 import { urlRules } from "./urlAnalyzer";
-import { httpsRules } from "./pageAnalyzer";
+import { domainRules, httpsRules } from "./pageAnalyzer";
 import { contentRules, redirectRules } from "./redirectAnalyzer";
+import { dangerousActionRules } from "./dangerousActions";
+import { createLogger } from "@/utils/logger";
+
+const log = createLogger("rule-engine");
 
 /** All deterministic rules, grouped for the "Why this score?" view. */
 export const ALL_RULES: readonly DetectionRule[] = [
   ...urlRules,
   ...httpsRules,
   ...contentRules,
+  ...domainRules,
   ...redirectRules,
+  ...dangerousActionRules,
 ];
 
 export interface RuleEngineResult {
@@ -41,8 +47,10 @@ export function runRuleEngine(context: ScanContext): RuleEngineResult {
       if (result.matched) {
         factors.push(ruleToRiskFactor(rule, result));
       }
-    } catch {
-      // A failing rule must never break the whole scan; record and continue.
+    } catch (error) {
+      // A failing rule must never break the whole scan; record, log, continue.
+      // The log is what distinguishes a programming error from a legit skip.
+      log.warn(`Rule evaluation failed: ${rule.id}`, error);
       skippedRuleIds.push(rule.id);
     }
   }

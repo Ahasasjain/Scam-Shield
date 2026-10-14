@@ -10,39 +10,69 @@ import {
   startThreatFeed,
   stopThreatFeed,
 } from "./routes/threatLookup.js";
-import { createRateLimiter } from "./middleware/rateLimit.js";
+import {
+  createAiRateLimiter,
+  createThreatRateLimiter,
+} from "./middleware/rateLimit.js";
 import { createOriginCheck } from "./middleware/originCheck.js";
 import { errorHandler, notFoundHandler } from "./middleware/errorHandler.js";
-import { AiAnalyzer } from "./services/openaiAnalyzer.js";
-import { resolveProvider } from "./services/aiProviders.js";
+import { GroqAnalyzer } from "./services/groqAnalyzer.js";
 import { logger } from "./lib/logger.js";
 
 interface Env {
   PORT: string;
-  AI_PROVIDER: string;
-  AI_API_KEY: string;
-  AI_BASE_URL: string;
-  AI_MODEL: string;
+  GROQ_API_KEY: string;
+  GROQ_MODEL: string;
+  GOOGLE_SAFEBROWSING_API_KEY: string;
   ALLOWED_EXTENSION_ORIGINS: string;
   RATE_LIMIT_MAX: string;
   RATE_LIMIT_WINDOW_MINUTES: string;
+  /** Threat lookups run on every page scan, so they get their own budget. */
+  THREAT_RATE_LIMIT_MAX: string;
+  THREAT_RATE_LIMIT_WINDOW_MINUTES: string;
+  THREAT_FEED_URL: string;
 }
 
 function loadEnv(): Env {
   const env: Env = {
     PORT: process.env["PORT"] ?? "8787",
-    AI_PROVIDER: process.env["AI_PROVIDER"] ?? "",
-    AI_API_KEY: process.env["AI_API_KEY"] ?? "",
-    AI_BASE_URL: process.env["AI_BASE_URL"] ?? "",
-    AI_MODEL: process.env["AI_MODEL"] ?? "",
+    GROQ_API_KEY: process.env["GROQ_API_KEY"] ?? "",
+    GROQ_MODEL: process.env["GROQ_MODEL"] ?? "openai/gpt-oss-120b",
+    GOOGLE_SAFEBROWSING_API_KEY: process.env["GOOGLE_SAFEBROWSING_API_KEY"] ?? "",
     ALLOWED_EXTENSION_ORIGINS: process.env["ALLOWED_EXTENSION_ORIGINS"] ?? "",
     RATE_LIMIT_MAX: process.env["RATE_LIMIT_MAX"] ?? "20",
     RATE_LIMIT_WINDOW_MINUTES: process.env["RATE_LIMIT_WINDOW_MINUTES"] ?? "15",
+    THREAT_RATE_LIMIT_MAX: process.env["THREAT_RATE_LIMIT_MAX"] ?? "600",
+    THREAT_RATE_LIMIT_WINDOW_MINUTES:
+      process.env["THREAT_RATE_LIMIT_WINDOW_MINUTES"] ?? "15",
+    THREAT_FEED_URL: process.env["THREAT_FEED_URL"] ?? "",
   };
 
-  if (!env.AI_API_KEY) {
+  // A non-numeric rate-limit value would otherwise reach express-rate-limit as
+  // NaN (fail-open or a boot crash depending on version). Validate instead.
+  for (const key of [
+    "RATE_LIMIT_MAX",
+    "RATE_LIMIT_WINDOW_MINUTES",
+    "THREAT_RATE_LIMIT_MAX",
+    "THREAT_RATE_LIMIT_WINDOW_MINUTES",
+  ] as const) {
+    if (!Number.isFinite(Number(env[key])) || Number(env[key]) <= 0) {
+      throw new Error(
+        `Invalid ${key} value ${JSON.stringify(env[key])} — must be a positive number.`,
+      );
+    }
+  }
+
+  if (!env.GROQ_API_KEY) {
     logger.warn(
-      "AI_API_KEY is not set — /api/analyze will return errors until it is configured.",
+      "GROQ_API_KEY is not set — /api/analyze will report AI unavailable until configured.",
+    );
+  }
+  if (!env.GOOGLE_SAFEBROWSING_API_KEY) {
+    // Loud, because a missing key means the strongest threat signal is silently
+    // absent. The extension surfaces this as LOOKUP_UNAVAILABLE, never "clean".
+    logger.warn(
+      "GOOGLE_SAFEBROWSING_API_KEY (or GCSB_API_KEY) is not set — threat lookups fall back to OpenPhish plus the curated list, and the Safe Browsing status is reported as unavailable.",
     );
   }
   return env;
@@ -60,38 +90,42 @@ function createApp(env: Env): express.Express {
     .map((o) => o.trim())
     .filter(Boolean);
 
-  app.use(createOriginCheck(allowedOrigins));
+  // Health is registered FIRST and deliberately outside both the origin check
+  // and the rate limiter. An uptime probe or load-balancer health check sends
+  // no Origin header, so gating it would return 403 in production and report
+  // the service as down while it is healthy.
+  app.use(createHealthRouter());
+
+  // Per-route scopes: a single global limiter would let ordinary browsing
+  // exhaust the AI budget, because threat-lookup fires on every page scan.
   app.use(
-    createRateLimiter(
-      Number(env.RATE_LIMIT_MAX),
-      Number(env.RATE_LIMIT_WINDOW_MINUTES),
+    "/api/analyze",
+    createAiRateLimiter(Number(env.RATE_LIMIT_MAX), Number(env.RATE_LIMIT_WINDOW_MINUTES)),
+  );
+  app.use(
+    "/api/threat-lookup",
+    createThreatRateLimiter(
+      Number(env.THREAT_RATE_LIMIT_MAX),
+      Number(env.THREAT_RATE_LIMIT_WINDOW_MINUTES),
     ),
   );
 
-  const resolved = resolveProvider({
-    AI_PROVIDER: env.AI_PROVIDER,
-    AI_API_KEY: env.AI_API_KEY,
-    AI_BASE_URL: env.AI_BASE_URL,
-    AI_MODEL: env.AI_MODEL,
-  });
+  app.use(createOriginCheck(allowedOrigins));
 
   logger.info(
     {
-      provider: resolved.provider.id,
-      model: resolved.model,
-      baseUrl: resolved.baseUrl,
+      provider: "groq",
+      model: env.GROQ_MODEL,
+      baseUrl: "https://api.groq.com/openai/v1",
     },
     "AI analyzer configured",
   );
 
-  const analyzer = new AiAnalyzer({
-    provider: resolved.provider.id,
-    apiKey: resolved.apiKey,
-    baseUrl: resolved.baseUrl,
-    model: resolved.model,
+  const analyzer = new GroqAnalyzer({
+    apiKey: env.GROQ_API_KEY,
+    model: env.GROQ_MODEL,
   });
 
-  app.use(createHealthRouter());
   app.use(createThreatLookupRouter());
   app.use(createAnalyzeRouter(analyzer));
   app.use(notFoundHandler);
@@ -128,11 +162,27 @@ const server = app.listen(Number(env.PORT), () => {
   logger.info(`ScamShield API listening on port ${env.PORT}`);
 });
 
+// A crashing process must say why before it dies (container orchestrators
+// restart it; the log line is what lets an operator diagnose the crash).
+process.on("uncaughtException", (error) => {
+  logger.fatal({ err: error }, "Uncaught exception — exiting");
+  process.exit(1);
+});
+
+process.on("unhandledRejection", (reason) => {
+  logger.fatal({ err: reason }, "Unhandled rejection — exiting");
+  process.exit(1);
+});
+
 // Graceful shutdown
 for (const signal of ["SIGINT", "SIGTERM"] as const) {
   process.on(signal, () => {
     logger.info(`${signal} received — shutting down`);
     stopThreatFeed();
+    // server.close waits for in-flight requests, but a dangling keep-alive
+    // connection must not hold the deploy pipeline forever.
+    const forceExit = setTimeout(() => process.exit(1), 10_000);
+    forceExit.unref();
     server.close(() => process.exit(0));
   });
 }

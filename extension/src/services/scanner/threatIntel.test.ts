@@ -1,6 +1,7 @@
 import { describe, expect, it, vi, beforeEach } from "vitest";
 import {
   BackendThreatProvider,
+  LocalFeedProvider,
   lookupThreatIntelligence,
   threatVerdictOverride,
 } from "./threatIntelligenceAnalyzer";
@@ -66,10 +67,12 @@ describe("threat intelligence (spec §4–§7)", () => {
       threatVerdictOverride({
         available: true,
         matched: true,
+        status: "MATCH",
+        safeBrowsingStatus: "KNOWN_MALICIOUS",
         confidence: "confirmed",
         checkedAt: Date.now(),
       }),
-    ).toBe("dangerous");
+    ).toBe("DANGEROUS");
   });
 
   it("unavailable lookup never overrides to safe", () => {
@@ -77,9 +80,85 @@ describe("threat intelligence (spec §4–§7)", () => {
       threatVerdictOverride({
         available: false,
         matched: false,
+        status: "UNAVAILABLE",
+        safeBrowsingStatus: "LOOKUP_UNAVAILABLE",
         checkedAt: Date.now(),
       }),
     ).toBeNull();
+  });
+
+  it("surfaces an explicit provider outage instead of a clean result (§2)", async () => {
+    // The backend now reports a total provider outage as available:false with
+    // a reason. The extension must not reinterpret that as "no known threat".
+    const fetchMock = vi.fn().mockResolvedValueOnce(
+      new Response(
+        JSON.stringify({
+          available: false,
+          matched: false,
+          status: "UNAVAILABLE",
+          safeBrowsingStatus: "LOOKUP_UNAVAILABLE",
+          reason: "Google Safe Browsing is not configured.",
+        }),
+        { status: 200 },
+      ),
+    );
+    vi.stubGlobal("fetch", fetchMock);
+    const provider = new BackendThreatProvider({ baseUrl: "https://api.test" });
+
+    const result = await lookupThreatIntelligence(
+      {
+        normalizedUrl: "https://unknown.example",
+        registrableDomain: "unknown.example",
+      },
+      provider,
+    );
+
+    expect(result.match.available).toBe(false);
+    expect(result.match.status).toBe("UNAVAILABLE");
+    expect(result.match.safeBrowsingStatus).toBe("LOOKUP_UNAVAILABLE");
+    expect(result.match.reason).toMatch(/not configured/i);
+    expect(result.evidence).toEqual([]);
+    vi.unstubAllGlobals();
+  });
+
+  it("never caches a provider outage as a clean result (§7)", async () => {
+    const fetchMock = vi.fn().mockResolvedValue(
+      new Response(
+        JSON.stringify({
+          available: false,
+          matched: false,
+          status: "UNAVAILABLE",
+          safeBrowsingStatus: "LOOKUP_UNAVAILABLE",
+        }),
+        { status: 200 },
+      ),
+    );
+    vi.stubGlobal("fetch", fetchMock);
+    const provider = new BackendThreatProvider({ baseUrl: "https://api.test" });
+    const input = {
+      normalizedUrl: "https://outage.example",
+      registrableDomain: "outage.example",
+    };
+
+    const first = await lookupThreatIntelligence(input, provider);
+    const second = await lookupThreatIntelligence(input, provider);
+
+    expect(first.match.available).toBe(false);
+    // A second lookup must re-hit the network: outages are not cacheable.
+    expect(second.fromCache).toBe(false);
+    expect(fetchMock).toHaveBeenCalledTimes(2);
+    vi.unstubAllGlobals();
+  });
+
+  it("labels a clean local-feed miss as unknown, never 'benign' (§2)", async () => {
+    const result = await lookupThreatIntelligence(
+      { normalizedUrl: "https://unknown.example", registrableDomain: "unknown.example" },
+      new LocalFeedProvider(),
+    );
+
+    expect(result.match.matched).toBe(false);
+    // "benign" here would assert safety from a 12-entry curated list.
+    expect(result.evidence[0]?.verdict).toBe("unknown");
   });
 
   it("caches negative results but never caches outages (§7)", async () => {
@@ -110,7 +189,7 @@ describe("threat intelligence (spec §4–§7)", () => {
 describe("deriveVerdict (spec §3, §30) — unknown is not safe", () => {
   const noIdentity = undefined;
 
-  it("high score + official domain → known_safe", () => {
+  it("high score + official domain without threat lookup → SAFE", () => {
     expect(
       deriveVerdict({
         score: 100,
@@ -123,22 +202,45 @@ describe("deriveVerdict (spec §3, §30) — unknown is not safe", () => {
         },
         pageAnalyzed: true,
       }),
-    ).toBe("known_safe");
+    ).toBe("SAFE");
   });
 
-  it("high score + unrelated domain + NO page analysis → unknown (never safe)", () => {
+  it("high score + official domain with a no-match → LOW_RISK", () => {
+    expect(
+      deriveVerdict({
+        score: 100,
+        threatMatch: {
+          available: true,
+          matched: false,
+          status: "NO_KNOWN_THREAT",
+          safeBrowsingStatus: "NO_KNOWN_THREAT",
+          checkedAt: Date.now(),
+        },
+        domainIdentity: {
+          hostname: "google.com",
+          registrableDomain: "google.com",
+          publicSuffix: "com",
+          organizationDomain: "google.com",
+          relationship: "official",
+        },
+        pageAnalyzed: true,
+      }),
+    ).toBe("LOW_RISK");
+  });
+
+  it("high score + unrelated domain + NO page analysis → UNKNOWN (never safe)", () => {
     expect(
       deriveVerdict({ score: 100, domainIdentity: noIdentity, pageAnalyzed: false }),
-    ).toBe("unknown");
+    ).toBe("UNKNOWN");
   });
 
-  it("high score + unrelated domain + page analyzed → low_risk", () => {
+  it("high score + unrelated domain + page analyzed → LOW_RISK", () => {
     expect(
       deriveVerdict({ score: 95, domainIdentity: noIdentity, pageAnalyzed: true }),
-    ).toBe("low_risk");
+    ).toBe("LOW_RISK");
   });
 
-  it("lookalike → at least suspicious even with high score", () => {
+  it("lookalike → at least SUSPICIOUS even with high score", () => {
     expect(
       deriveVerdict({
         score: 90,
@@ -152,13 +254,13 @@ describe("deriveVerdict (spec §3, §30) — unknown is not safe", () => {
         },
         pageAnalyzed: false,
       }),
-    ).toBe("suspicious");
+    ).toBe("SUSPICIOUS");
   });
 
   it("mid scores map to suspicious/high_risk bands", () => {
-    expect(deriveVerdict({ score: 60, pageAnalyzed: true })).toBe("suspicious");
-    expect(deriveVerdict({ score: 40, pageAnalyzed: true })).toBe("high_risk");
-    expect(deriveVerdict({ score: 10, pageAnalyzed: true })).toBe("dangerous");
+    expect(deriveVerdict({ score: 60, pageAnalyzed: true })).toBe("SUSPICIOUS");
+    expect(deriveVerdict({ score: 40, pageAnalyzed: true })).toBe("HIGH_RISK");
+    expect(deriveVerdict({ score: 10, pageAnalyzed: true })).toBe("DANGEROUS");
   });
 });
 
@@ -178,7 +280,7 @@ describe("generic phishing now scores risky (the core bug)", () => {
       pageAnalyzed: true,
       factorIds,
     });
-    expect(verdict === "suspicious" || verdict === "high_risk").toBe(true);
+    expect(verdict === "SUSPICIOUS" || verdict === "HIGH_RISK").toBe(true);
   });
 
   it("cross-origin credential submission alone is high risk or dangerous", () => {
@@ -187,6 +289,6 @@ describe("generic phishing now scores risky (the core bug)", () => {
       pageAnalyzed: true,
       factorIds: ["page-cross-origin-credentials"],
     });
-    expect(verdict === "high_risk" || verdict === "dangerous").toBe(true);
+    expect(verdict === "HIGH_RISK" || verdict === "DANGEROUS").toBe(true);
   });
 });

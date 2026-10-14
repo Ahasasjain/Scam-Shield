@@ -1,6 +1,6 @@
 # 🛡️ ScamShield
 
-A production-ready Chrome extension (Manifest V3) that detects potentially fake, malicious, phishing, and scam websites using a **deterministic rule engine**, with **optional AI analysis** powered by the OpenAI API through your own Node.js + Express backend.
+A production-ready Chrome extension (Manifest V3) that detects potentially fake, malicious, phishing, and scam websites using a **deterministic rule engine**, with **optional Groq AI enrichment** through your own Node.js + Express backend.
 
 > ⚠️ **Important product principle:** ScamShield provides _probabilistic risk indicators_, not guarantees. It never claims a site is "definitely safe" or "definitely a scam".
 
@@ -10,7 +10,7 @@ A production-ready Chrome extension (Manifest V3) that detects potentially fake,
 
 - 🔍 **Rule-based detection engine** — 15+ explainable heuristics covering URL structure, punycode/lookalike domains, brand impersonation, suspicious TLDs, HTTPS usage, page content patterns (login/payment forms, urgency language, giveaway scams, fake security warnings), and redirects.
 - 🧮 **Transparent scoring** — 0–100 score in five bands (Critical / High / Medium / Low / Safe), with a "Why this score?" breakdown showing each category's contribution.
-- 🤖 **Optional AI analysis** — off by default. When enabled, only _minimal security signals_ are sent to _your_ backend, which holds the OpenAI key. AI responses are schema-validated (Zod) before display, and can never override deterministic rule findings.
+- 🤖 **Optional Groq analysis** — off by default and requested only for meaningful local evidence. Only _sanitized security signals_ are sent to _your_ backend, which holds `GROQ_API_KEY`. Responses are schema-validated before display, and can never override deterministic threat findings.
 - 🖥️ **Popup + Side Panel UIs** — modern security-dashboard design with dark/light/system themes.
 - 🕘 **Local scan history** — hostname, score, risk level, and time; stored only on-device, capped at 50 entries, clearable anytime.
 - ♿ **Accessible** — keyboard navigation, ARIA roles, focus rings, `prefers-reduced-motion` support.
@@ -44,7 +44,7 @@ scamshield/
 │       ├── index.ts            # App bootstrap: helmet, CORS, rate limit, routes
 │       ├── routes/             # analyze.ts, health.ts
 │       ├── middleware/         # errorHandler, rateLimit, originCheck
-│       ├── services/           # openaiAnalyzer.ts (JSON mode + Zod validation)
+│       ├── services/           # groqAnalyzer.ts (strict JSON + Zod validation)
 │       └── lib/logger.ts       # pino structured logging with redaction
 ├── shared/                     # Shared types + Zod schemas (single source of truth)
 ├── pnpm-workspace.yaml
@@ -96,7 +96,7 @@ pnpm build          # builds extension/ and server/
 
 ```bash
 cp .env.example server/.env
-# Edit server/.env — set AI_API_KEY=sk-... (never commit it!)
+# Edit server/.env — set GROQ_API_KEY=gsk_... (never commit it!)
 
 pnpm dev:server     # http://localhost:8787
 ```
@@ -109,8 +109,8 @@ The extension works fully without the backend — AI is optional by design, and 
 
 | Variable                    | Description                                         | Default                            |
 | --------------------------- | --------------------------------------------------- | ---------------------------------- |
-| `AI_PROVIDER`               | AI provider (`openai`)                              | `openai`                           |
-| `AI_API_KEY`                | OpenAI secret key — **server only**                 | —                                  |
+| `GROQ_MODEL`                | Groq model                                          | `openai/gpt-oss-120b`              |
+| `GROQ_API_KEY`              | Groq secret key — **server only**                   | —                                  |
 | `AI_MODEL`                  | Chat model                                          | `gpt-4o-mini`                      |
 | `API_BASE_URL`              | Public base URL of the API                          | `http://localhost:8787`            |
 | `PORT`                      | Server port                                         | `8787`                             |
@@ -170,7 +170,7 @@ cd server
 pnpm install && pnpm build && pnpm start    # honors PORT env
 ```
 
-Set `NODE_ENV=production`, `AI_API_KEY`, and `ALLOWED_EXTENSION_ORIGINS=chrome-extension://<your-extension-id>` in production.
+Set `NODE_ENV=production`, `GROQ_API_KEY`, `GROQ_MODEL=openai/gpt-oss-120b`, and `ALLOWED_EXTENSION_ORIGINS=chrome-extension://<your-extension-id>` in production.
 
 ## Chrome Web Store checklist
 

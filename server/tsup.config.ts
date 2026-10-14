@@ -16,6 +16,6 @@ export default defineConfig({
   // workspace package ships raw TypeScript (main points at src/index.ts),
   // so it MUST be bundled — leaving it external makes `node dist/index.js`
   // crash with ERR_UNKNOWN_FILE_EXTENSION at runtime.
-  external: ["openai", "express", "helmet", "cors", "express-rate-limit", "pino"],
+  external: ["express", "helmet", "cors", "express-rate-limit", "pino"],
   noExternal: [/@scamshield\/shared/],
 });

@@ -29,7 +29,7 @@ ScamShield is designed privacy-first. This policy describes exactly what the ext
 
 ## Third-party services
 
-When AI Detection is enabled, your configured backend forwards minimal signals to an AI provider (OpenAI) to generate the analysis. The API key for that provider is held server-side and is never included in the extension. No other third parties receive data, and the extension contains no analytics or tracking.
+When AI Detection is enabled and local evidence justifies enrichment, your configured backend forwards minimal sanitized signals to Groq to generate the analysis. The `GROQ_API_KEY` is held server-side and is never included in the extension. No passwords, OTPs, cookies, session tokens, authorization headers, payment numbers, or sensitive form values are sent. No other third parties receive data, and the extension contains no analytics or tracking.
 
 ## Permissions
 

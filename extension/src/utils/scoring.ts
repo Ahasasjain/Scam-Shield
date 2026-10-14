@@ -79,11 +79,17 @@ export function calculateScore(
   );
   const allFactors = [...ruleFactors, ...aiFactors, ...correlations];
 
-  // Per-group raw sums.
+  // Per-group raw sums. Points are sanitized per factor: a NaN (e.g. from a
+  // malformed AI indicator) would otherwise poison the total into NaN and
+  // collapse the score, and negatives would inflate it.
   const groupSums = new Map<EvidenceGroupKey, number>();
   for (const factor of allFactors) {
+    const points =
+      typeof factor.points === "number" && Number.isFinite(factor.points)
+        ? Math.max(0, Math.min(100, factor.points))
+        : 0;
     const group = groupOf(factor.id);
-    groupSums.set(group, (groupSums.get(group) ?? 0) + factor.points);
+    groupSums.set(group, (groupSums.get(group) ?? 0) + points);
   }
 
   // Apply caps per group.

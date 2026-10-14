@@ -7,6 +7,8 @@
  * structural URL parsing.
  */
 
+import { getRegistrableDomain } from "@/utils/domainIdentity";
+
 const SUSPICIOUS_TLDS = new Set([
   "zip",
   "mov",
@@ -100,12 +102,14 @@ export function parseUrl(rawUrl: string): ParsedUrl {
   }
 
   const hostname = url.hostname.toLowerCase();
-  const isIpHost = IPV4_PATTERN.test(hostname);
+  // IPv4 literals match the dotted-quad pattern; IPv6 literals (brackets are
+  // already stripped by URL.hostname) contain colons. Both evade domain
+  // reputation and must hit the url-ip-host rule instead of being parsed as
+  // ordinary domains.
+  const isIpHost = IPV4_PATTERN.test(hostname) || hostname.includes(":");
   const parts = hostname.split(".");
   const tld = parts.length > 1 ? (parts.at(-1) ?? "") : "";
-  // Approximate registrable domain: last two labels (does not cover multi-part
-  // public suffixes like co.uk — acceptable heuristic for V1).
-  const registrableDomain = parts.length >= 2 ? parts.slice(-2).join(".") : hostname;
+  const registrableDomain = getRegistrableDomain(hostname) ?? hostname;
 
   return {
     valid: true,
@@ -141,19 +145,6 @@ export function hasExcessiveEncoding(url: string): boolean {
 export function containsBrandKeyword(text: string): boolean {
   const lower = text.toLowerCase();
   return BRAND_KEYWORDS.some((brand) => lower.includes(brand));
-}
-
-/**
- * @deprecated Use `classifyDomain()` from `domainIdentity.ts` instead.
- * Kept temporarily so existing imports keep compiling during migration.
- */
-export function findBrandImpersonation(
-  hostname: string,
-  registrableDomain: string,
-): string | null {
-  void hostname;
-  void registrableDomain;
-  return null;
 }
 
 export function isChromeInternalUrl(url: string): boolean {

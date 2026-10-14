@@ -5,7 +5,7 @@ import psl from "psl";
 
 /**
  * Domain identity module — the single source of truth for deciding whether a
- * hostname genuinely belongs to a claimed brand (docs/scamshield-rule-engine-changes.md §2–§7).
+ * hostname genuinely belongs to a claimed brand (docs/rule-engine.md).
  *
  * Key principle: impersonation is judged on the REGISTRABLE DOMAIN, never on
  * whether the hostname merely contains a brand string. `accounts.google.com`
@@ -38,7 +38,7 @@ export const BRANDS: readonly BrandDefinition[] = [
   },
   {
     id: "facebook",
-    names: ["facebook", "facebok", "facbook"],
+    names: ["facebook", "fakebook", "facebok", "facbook"],
     officialDomains: [
       "facebook.com",
       "fb.com",
@@ -217,6 +217,31 @@ export function isOfficialBrandDomain(
   return brandDefinition.officialDomains.some((d) => d === lower);
 }
 
+/**
+ * Finds the brand that owns a registrable domain.
+ *
+ * Several properties appear in more than one registry (instagram.com and
+ * whatsapp.com sit under both `facebook` and their own brand; linkedin.com
+ * under both `microsoft` and `linkedin`). Reporting the conglomerate would
+ * label Instagram as "Facebook" in the UI, so the brand whose own name
+ * appears in the domain wins. Falls back to the first registrant.
+ */
+export function findOwningBrand(registrableDomain: string): BrandDefinition | null {
+  const owners = BRANDS.filter((candidate) =>
+    isOfficialBrandDomain(registrableDomain, candidate),
+  );
+  if (owners.length === 0) return null;
+  if (owners.length === 1) return owners[0]!;
+
+  const label = registrableDomain.toLowerCase().split(".")[0] ?? "";
+  const specific = owners.find((candidate) =>
+    candidate.names.some(
+      (name) => label === name || label.startsWith(name) || label.includes(name),
+    ),
+  );
+  return specific ?? owners[0]!;
+}
+
 // ---------------------------------------------------------------------------
 // Homoglyph normalization + similarity (§7)
 // ---------------------------------------------------------------------------
@@ -270,7 +295,7 @@ export const LOOKALIKE_MODERATE_SIMILARITY = 0.7;
 // The classifier (§5, §6, §7)
 // ---------------------------------------------------------------------------
 
-export function classifyDomain(hostname: string): DomainIdentity {
+export function classifyDomain(hostname: string, pathname = ""): DomainIdentity {
   const lower = hostname.toLowerCase();
   const registrableDomain = getRegistrableDomain(lower);
   const publicSuffix = getPublicSuffix(lower);
@@ -289,6 +314,31 @@ export function classifyDomain(hostname: string): DomainIdentity {
     return base;
   }
 
+  // §4 — Official-domain check takes precedence over ALL lookalike scoring.
+  //
+  // This must compare the registrable domain against EVERY brand's official
+  // domains, NOT only the brand whose name happens to appear in the hostname.
+  // Two reasons:
+  //
+  // 1. A brand's own official domain is trivially "similar" to itself. The
+  //    lookalike loop below scores similarity 1.0 for any registrable domain
+  //    whose first label equals a brand's official first label — which would
+  //    otherwise flag youtube.com (an official google property, but with no
+  //    "google" in the hostname) as a lookalike of google.com.
+  // 2. Brands legitimately own domains whose name differs from the brand
+  //    string (gmail.com, icloud.com, primevideo.com, steampowered.com...).
+  //
+  // A registrable domain that is on the allowlist can never be a lookalike.
+  const officialBrand = findOwningBrand(registrableDomain);
+  if (officialBrand) {
+    return {
+      ...base,
+      detectedBrand: officialBrand.id,
+      matchedOfficialDomain: registrableDomain,
+      relationship: registrableDomain === lower ? "official" : "trusted-subdomain",
+    };
+  }
+
   const brand = findBrandByName(lower);
 
   // §7 — lookalike evaluation on the registrable domain's first label.
@@ -303,6 +353,8 @@ export function classifyDomain(hostname: string): DomainIdentity {
       const officialFirstLabel = officialDomain.split(".")[0] ?? "";
       // Skip trivially short labels — "sbi" vs anything is too noisy.
       if (officialFirstLabel.length < 5) continue;
+      // Defensive: a brand never impersonates itself.
+      if (officialDomain.toLowerCase() === regLower) continue;
       const score = similarity(
         normalizeDomainLabel(firstLabel),
         normalizeDomainLabel(officialFirstLabel),
@@ -313,24 +365,11 @@ export function classifyDomain(hostname: string): DomainIdentity {
     }
   }
 
-  // Official-domain check takes precedence over lookalike scoring.
-  if (brand && isOfficialBrandDomain(registrableDomain, brand)) {
-    return {
-      ...base,
-      detectedBrand: brand.id,
-      matchedOfficialDomain: registrableDomain,
-      relationship: registrableDomain === lower ? "official" : "trusted-subdomain",
-    };
-  }
-
   // §6 step 5 — brand appears in an attacker-controlled subdomain
   // (e.g. google.login.attacker.example).
-  const primaryName = brand?.names[0] ?? "";
-  const brandInSubdomainOnly =
-    brand !== null &&
-    primaryName !== "" &&
-    !regLower.includes(primaryName) &&
-    lower.includes(primaryName);
+  const matchedSubdomainName =
+    brand?.names.find((name) => !regLower.includes(name) && lower.includes(name)) ?? "";
+  const brandInSubdomainOnly = matchedSubdomainName !== "";
 
   if (brandInSubdomainOnly) {
     return { ...base, detectedBrand: brand!.id, relationship: "brand-in-subdomain" };
@@ -350,6 +389,7 @@ export function classifyDomain(hostname: string): DomainIdentity {
   // Brand keyword embedded in the registrable domain itself on a
   // non-official domain (e.g. paypal-support.com, google-login.net).
   // This is the classic "brand + phishing keyword" registration pattern.
+  const primaryName = brand?.names[0] ?? "";
   if (brand && regLower.includes(primaryName)) {
     const PHISHING_KEYWORDS = [
       "support",
@@ -382,6 +422,22 @@ export function classifyDomain(hostname: string): DomainIdentity {
     }
   }
 
-  // No brand relationship found.
+  // A brand in the path is weak supporting evidence only. It is deliberately
+  // kept separate from hostname impersonation and never creates a strong
+  // identity verdict on its own.
+  let pathBrand: BrandDefinition | null = null;
+  try {
+    pathBrand = findBrandByName(decodeURIComponent(pathname));
+  } catch {
+    pathBrand = findBrandByName(pathname);
+  }
+  if (pathBrand) {
+    return {
+      ...base,
+      detectedBrand: pathBrand.id,
+      relationship: "brand-in-path",
+    };
+  }
+
   return base;
 }

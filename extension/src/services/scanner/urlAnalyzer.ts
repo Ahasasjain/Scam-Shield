@@ -6,7 +6,7 @@ import {
 } from "@/utils/domainIdentity";
 
 /**
- * URL-based detection rules, rewritten per docs/scamshield-rule-engine-changes.md.
+ * URL-based detection rules (see docs/rule-engine.md §4.1).
  *
  * Design principles:
  * - Brand/impersonation findings come from the DomainIdentity classifier,
@@ -23,6 +23,23 @@ function identityOf(context: {
 }
 
 export const urlRules: DetectionRule[] = [
+  {
+    id: "url-explicit-phishing-name",
+    name: "Domain uses a phishing-related name",
+    description:
+      "The registrable domain contains an explicit phishing, scam, malware, or credential-theft term. This is a warning, not proof by itself.",
+    severity: "high",
+    points: 22,
+    category: "url",
+    evaluate: ({ urlSignals, domainIdentity }) => ({
+      matched:
+        domainIdentity?.relationship === "unrelated" &&
+        /(^|[-.])(phishing|scam|malware|credential|steal)([-.]|$)/i.test(
+          urlSignals.registrableDomain,
+        ),
+      explanation: `Registrable domain is ${urlSignals.registrableDomain}.`,
+    }),
+  },
   // ------------------------------------------------------------------
   // §9 — weak structural evidence. Small points; never decisive alone.
   // ------------------------------------------------------------------
@@ -152,9 +169,14 @@ export const urlRules: DetectionRule[] = [
     category: "url",
     evaluate: (ctx) => {
       const id = identityOf(ctx);
+      const similarity = id?.similarity ?? 0;
+      // Tiered with url-lookalike-domain-strong below: a near-identical
+      // domain must produce ONE impersonation finding, not two for the same
+      // underlying signal (spec §10 no-double-counting).
       const matched =
         id?.relationship === "lookalike" &&
-        (id.similarity ?? 0) >= LOOKALIKE_MODERATE_SIMILARITY;
+        similarity >= LOOKALIKE_MODERATE_SIMILARITY &&
+        similarity < LOOKALIKE_HIGH_SIMILARITY;
       return {
         matched,
         explanation: matched

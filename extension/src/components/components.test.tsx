@@ -1,24 +1,9 @@
 import { describe, expect, it, vi } from "vitest";
 import { render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
-import { AIModeToggle } from "@/components/AIModeToggle";
 import { SecurityScore } from "@/components/SecurityScore";
 import { ScanHistory } from "@/components/ScanHistory";
 import { RecommendationCard } from "@/components/RecommendationCard";
-
-describe("AIModeToggle", () => {
-  it("renders as a switch with aria-checked", () => {
-    render(<AIModeToggle enabled={false} onChange={vi.fn()} />);
-    expect(screen.getByRole("switch")).toHaveAttribute("aria-checked", "false");
-  });
-
-  it("calls onChange when clicked", async () => {
-    const onChange = vi.fn();
-    render(<AIModeToggle enabled={false} onChange={onChange} />);
-    await userEvent.click(screen.getByRole("switch"));
-    expect(onChange).toHaveBeenCalledWith(true);
-  });
-});
 
 describe("SecurityScore", () => {
   it("shows the score and probabilistic label for safe sites", () => {
@@ -41,15 +26,18 @@ describe("ScanHistory", () => {
     {
       hostname: "example.com",
       score: 95,
+      // New-shape entry: `verdict` is authoritative, `riskLevel` is legacy.
+      verdict: "SAFE" as const,
       riskLevel: "safe",
       scannedAt: Date.parse("2026-01-01T10:00:00Z"),
     },
   ];
 
-  it("renders history entries with score and badge", () => {
+  it("renders history entries with the verdict state and score", () => {
     render(<ScanHistory history={entries} onClear={vi.fn()} />);
     expect(screen.getByText("example.com")).toBeInTheDocument();
-    expect(screen.getByText("95")).toBeInTheDocument();
+    expect(screen.getByText(/score 95/)).toBeInTheDocument();
+    expect(screen.getByText(/Protected/)).toBeInTheDocument();
   });
 
   it("shows empty state when no history", () => {

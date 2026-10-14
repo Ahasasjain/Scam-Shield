@@ -1,6 +1,14 @@
 /*
  * ScamShield global styles — Tailwind v4 with class-based dark mode.
  * Theme tokens are CSS variables so both popup and side panel share them.
+ *
+ * Layout stability rules (shake fix):
+ * - popup has a FIXED size with internal scrolling, so content height
+ *   changes never resize the browser window (the #1 shake source).
+ * - scrollbar-gutter: stable reserves scrollbar space, so the scrollbar
+ *   appearing/disappearing never shifts content width.
+ * - animations are opacity-only (no translateY on lists) to avoid
+ *   compositor jank when many rows mount at once.
  */
 @import "tailwindcss";
 
@@ -36,6 +44,83 @@ body {
   padding: 0;
   font-family: var(--font-sans);
   -webkit-font-smoothing: antialiased;
+  text-rendering: optimizeLegibility;
+  background: #f1f5f9;
+}
+
+.dark body,
+.dark html {
+  background: #020617;
+}
+
+body {
+  min-width: 320px;
+}
+
+/* Pre-hydration paint: match the OS theme so the first frame doesn't flash
+ * the wrong background before React applies the stored theme setting.
+ * (Inline scripts are banned by the extension CSP, so this is CSS-only.) */
+@media (prefers-color-scheme: dark) {
+  html,
+  body {
+    background: #020617;
+  }
+}
+
+/*
+ * Popup geometry: natural sizing (Chrome measures the popup from its
+ * content). The shell caps its own height and scrolls internally, so long
+ * content never grows past 600px — but short content still yields a compact
+ * popup. Never set a fixed height or overflow:hidden on body/#root: Chrome
+ * can measure the window before styles apply and collapse the popup to a
+ * sliver (see the "invisible popup" regression).
+ *
+ * Spec §17 (UI width): 440px keeps evidence rows readable without feeling
+ * cramped. Chrome caps popups at 800x600.
+ */
+body[data-surface="popup"] {
+  width: 440px;
+  max-width: 100vw;
+}
+
+body[data-surface="popup"] #root {
+  display: block;
+  min-height: 120px;
+}
+
+body[data-surface="sidepanel"] #root {
+  min-height: 100vh;
+  display: flex;
+  flex-direction: column;
+}
+
+/* Internal scroll region: stable gutter, contained overscroll. */
+.ss-scroll {
+  overflow-y: auto;
+  overflow-x: hidden;
+  scrollbar-gutter: stable;
+  overscroll-behavior: contain;
+  -webkit-overflow-scrolling: touch;
+}
+
+.ss-scroll::-webkit-scrollbar {
+  width: 8px;
+}
+
+.ss-scroll::-webkit-scrollbar-thumb {
+  border-radius: 8px;
+  background: rgb(148 163 184 / 0.45);
+  border: 2px solid transparent;
+  background-clip: content-box;
+}
+
+.ss-scroll::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+/* Prevent scroll-chaining shake from nested expandable areas. */
+.ss-anchor {
+  overflow-anchor: none;
 }
 
 /* Respect reduced-motion preferences (spec §30/§38). */
@@ -57,20 +142,41 @@ body {
   border-radius: 4px;
 }
 
-/* Subtle entrance animation for cards. */
-@keyframes ss-fade-up {
+/* Opacity-only entrance: no transform, so mounting 50 history rows or
+ * a dozen finding cards never triggers layout / compositor shake. */
+@keyframes ss-fade {
   from {
     opacity: 0;
-    transform: translateY(6px);
   }
   to {
     opacity: 1;
-    transform: translateY(0);
   }
 }
 
 .ss-animate-in {
-  animation: ss-fade-up 0.25s ease-out both;
+  animation: ss-fade 0.18s ease-out both;
+  contain: content;
+}
+
+/* Loading skeleton shimmer for history (reserves space, no flash). */
+@keyframes ss-shimmer {
+  0% {
+    background-position: -400px 0;
+  }
+  100% {
+    background-position: 400px 0;
+  }
+}
+
+.ss-skeleton {
+  background: linear-gradient(
+    90deg,
+    rgb(148 163 184 / 0.15) 25%,
+    rgb(148 163 184 / 0.3) 37%,
+    rgb(148 163 184 / 0.15) 63%
+  );
+  background-size: 800px 100%;
+  animation: ss-shimmer 1.2s ease-in-out infinite;
 }
 
 /* Score ring reveal. */

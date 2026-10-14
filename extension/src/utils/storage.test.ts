@@ -18,31 +18,30 @@ describe("storage utils", () => {
   it("returns default settings when nothing stored", async () => {
     const settings = await getSettings();
     expect(settings).toEqual({
-      aiEnabled: false, // spec §7: AI default OFF
       autoScan: true, // user request: automatic scanning ON by default
       theme: "system",
     });
   });
 
   it("saves and reads back settings", async () => {
-    await saveSettings({ aiEnabled: true });
+    await saveSettings({ autoScan: false });
     const settings = await getSettings();
-    expect(settings.aiEnabled).toBe(true);
+    expect(settings.autoScan).toBe(false);
   });
 
   it("ignores corrupt stored settings", async () => {
     mockChrome.storage.local.get.mockResolvedValueOnce({
-      settings: { aiEnabled: "yes", theme: "rainbow" },
+      settings: { autoScan: "yes", theme: "rainbow" },
     });
     const settings = await getSettings();
-    expect(settings.aiEnabled).toBe(false);
+    expect(settings.autoScan).toBe(true);
     expect(settings.theme).toBe("system");
   });
 
   it("resets to defaults", async () => {
-    await saveSettings({ aiEnabled: true, theme: "dark" });
+    await saveSettings({ autoScan: false, theme: "dark" });
     const after = await resetSettings();
-    expect(after.aiEnabled).toBe(false);
+    expect(after.autoScan).toBe(true);
     expect(after.theme).toBe("system");
   });
 

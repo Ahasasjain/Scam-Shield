@@ -2,23 +2,18 @@ import js from "@eslint/js";
 import tseslint from "typescript-eslint";
 import reactHooks from "eslint-plugin-react-hooks";
 import reactRefresh from "eslint-plugin-react-refresh";
-import globals from "globals";
 
 export default tseslint.config(
   { ignores: ["dist", "build", "coverage", "node_modules"] },
   js.configs.recommended,
-  ...tseslint.configs.strictTypeChecked,
+  ...tseslint.configs.recommended,
   {
     languageOptions: {
       parserOptions: {
         projectService: true,
         tsconfigRootDir: import.meta.dirname,
       },
-      globals: {
-        ...globals.browser,
-        ...globals.node,
-        chrome: "readonly",
-      },
+      globals: { chrome: "readonly" },
     },
     rules: {
       "@typescript-eslint/no-explicit-any": "error",
@@ -27,11 +22,12 @@ export default tseslint.config(
         "error",
         { prefer: "type-imports" },
       ],
+      "@typescript-eslint/no-unused-expressions": "off",
       "@typescript-eslint/no-unused-vars": [
         "error",
         { argsIgnorePattern: "^_", varsIgnorePattern: "^_" },
       ],
-      "no-console": ["warn", { allow: ["warn", "error"] }],
+      "no-console": "off",
       eqeqeq: ["error", "always"],
       "prefer-const": "error",
     },

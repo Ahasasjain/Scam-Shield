@@ -1,4 +1,4 @@
-import type { RiskFactor, Severity } from "@shared/index";
+import type { DomainSignals, RiskFactor, Severity } from "@shared/index";
 import type { DomainIdentity } from "@/utils/domainIdentity";
 
 /**
@@ -36,17 +36,26 @@ export interface ScanContext {
       isCrossOrigin: boolean;
       containsPassword: boolean;
       containsPaymentFields: boolean;
+      /** §3 sensitive categories collected by this form. */
+      kinds?: string[];
     }>;
+    /** §3: union of sensitive categories present anywhere on the page. */
+    sensitiveKinds?: string[];
+    crossOriginSensitiveForms?: number;
+    offDomainSensitiveForms?: number;
+    suspiciousDownloadCount?: number;
   };
   redirectSignals?: {
     chainLength: number;
     crossOriginHops: number;
     finalUrl: string;
   };
-  domainSignals?: {
-    available: false;
-    reason: string;
-  };
+  /**
+   * RDAP domain-age lookup result. Reuses the shared discriminated union so
+   * "lookup unavailable" can never be structurally confused with a successful
+   * lookup with no age (invariant: unknown !== safe).
+   */
+  domainSignals?: DomainSignals;
 }
 
 export interface RuleResult {

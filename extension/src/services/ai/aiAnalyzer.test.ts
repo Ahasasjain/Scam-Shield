@@ -33,6 +33,10 @@ const context: ScanContext = {
     tld: "com",
     pathLength: 1,
   },
+  domainSignals: {
+    available: false as const,
+    reason: "not configured",
+  },
 };
 
 // Mock the axios client factory so no real network calls occur.
@@ -87,6 +91,26 @@ describe("HttpAIAnalyzer", () => {
       expect(outcome.result.indicators).toHaveLength(1);
     }
     expect(post).toHaveBeenCalledWith("/api/analyze", { context });
+  });
+
+  it("redacts emails and opaque tokens from the transported path", async () => {
+    const { factory } = await getMocks();
+    const post = vi.fn().mockResolvedValue({
+      data: { ok: true, result: validAiResult },
+    });
+    factory.mockReturnValue({ post } as never);
+
+    const analyzer = new HttpAIAnalyzer({ baseUrl: "https://api.test" });
+    const outcome = await analyzer.analyze({
+      ...context,
+      url: "https://example.com/reset/eyJhbGciOiJIUzI1NiJ9cGF5bG9hZA/u/jane@example.com/verify",
+    });
+
+    expect(outcome.status).toBe("ok");
+    const sent = post.mock.calls[0]?.[1] as { context: ScanContext };
+    expect(sent.context.url).toBe(
+      "https://example.com/reset/[token]/u/[email]/verify",
+    );
   });
 
   it("rejects hostile/malformed AI payloads", async () => {

@@ -10,13 +10,16 @@ export function ErrorState({ title, message, action }: ErrorStateProps) {
   return (
     <div
       role="alert"
-      className="ss-animate-in flex flex-col items-center gap-2 rounded-xl border border-red-200 bg-red-50 p-4 text-center dark:border-red-900 dark:bg-red-950/40"
+      className="flex flex-col items-center gap-2 rounded-2xl border border-red-500/25 bg-gradient-to-b from-red-500/[0.08] to-transparent p-5 text-center shadow-sm"
     >
-      <span aria-hidden="true" className="text-2xl">
-        ⚠️
+      <span
+        aria-hidden="true"
+        className="flex h-10 w-10 items-center justify-center rounded-xl bg-red-500/10 text-lg font-bold text-red-500"
+      >
+        !
       </span>
-      <p className="text-sm font-semibold text-red-800 dark:text-red-300">{title}</p>
-      <p className="text-xs leading-relaxed text-red-700 dark:text-red-400">
+      <p className="text-sm font-bold tracking-tight text-red-800 dark:text-red-200">{title}</p>
+      <p className="max-w-[280px] text-xs leading-relaxed text-red-700/80 dark:text-red-300/80">
         {message}
       </p>
       {action}
@@ -34,14 +37,17 @@ export function EmptyState({
   message: string;
 }) {
   return (
-    <div className="flex flex-col items-center gap-1.5 py-10 text-center">
-      <span aria-hidden="true" className="text-3xl opacity-70">
+    <div className="flex min-h-[280px] flex-col items-center justify-center gap-2 rounded-2xl border border-dashed border-slate-300/80 px-6 py-10 text-center dark:border-white/15">
+      <span
+        aria-hidden="true"
+        className="flex h-12 w-12 items-center justify-center rounded-2xl bg-slate-500/[0.08] text-xl font-semibold text-slate-400 dark:text-slate-500"
+      >
         {icon}
       </span>
-      <p className="text-sm font-medium text-neutral-800 dark:text-neutral-200">
+      <p className="mt-1 text-sm font-bold tracking-tight text-slate-800 dark:text-slate-100">
         {title}
       </p>
-      <p className="max-w-[240px] text-xs leading-relaxed text-neutral-500 dark:text-neutral-400">
+      <p className="max-w-[260px] text-xs leading-relaxed text-slate-500 dark:text-slate-400">
         {message}
       </p>
     </div>

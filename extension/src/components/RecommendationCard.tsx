@@ -20,22 +20,22 @@ export function RecommendationCard({ riskLevel }: RecommendationCardProps) {
   return (
     <section
       aria-label="Recommendation"
-      className={`ss-animate-in rounded-xl border p-3 ${
+      className={`rounded-2xl border p-3.5 shadow-sm ${
         isWarning
-          ? "border-orange-300 bg-orange-50 dark:border-orange-800 dark:bg-orange-950/40"
-          : "border-neutral-200 bg-white dark:border-neutral-800 dark:bg-neutral-900"
+          ? "border-orange-500/30 bg-gradient-to-br from-orange-500/[0.10] to-transparent"
+          : "border-slate-200/80 bg-white dark:border-white/10 dark:bg-white/5"
       }`}
     >
       <h3
-        className={`text-xs font-semibold uppercase tracking-wide ${
+        className={`text-[10px] font-bold uppercase tracking-widest ${
           isWarning
-            ? "text-orange-700 dark:text-orange-400"
-            : "text-neutral-500 dark:text-neutral-400"
+            ? "text-orange-600 dark:text-orange-400"
+            : "text-slate-400 dark:text-slate-500"
         }`}
       >
         {isWarning ? "Recommendation" : "Summary"}
       </h3>
-      <p className="mt-1 text-xs leading-relaxed text-neutral-700 dark:text-neutral-300">
+      <p className="mt-1 text-xs leading-relaxed text-slate-600 dark:text-slate-300">
         {RECOMMENDATIONS[riskLevel]}
       </p>
     </section>

@@ -44,11 +44,14 @@ interface HttpAIAnalyzerOptions {
 }
 
 const FAILURE_REASONS: Record<ApiErrorCode, string> = {
-  network: "Network error contacting the AI service.",
+  network:
+    "Network error contacting the Groq service. Check that the backend is running and reachable.",
   timeout: "AI analysis timed out.",
   rate_limited: "AI rate limit reached. Try again later.",
-  unauthorized: "AI service authentication failed.",
-  server_error: "The AI service reported a server error.",
+  unauthorized: "Groq authentication failed. Check GROQ_API_KEY on the backend.",
+  upstream_error: "Groq is unavailable. Local security analysis is still available.",
+  server_error:
+    "Groq reported a server error. Local security analysis is still available.",
   invalid_response: "AI returned an unreadable response.",
 };
 
@@ -92,13 +95,24 @@ export class HttpAIAnalyzer implements AIAnalyzer {
           baseUrl: this.baseUrl,
           timeoutMs: this.timeoutMs,
         });
-        const response = await client.post("/api/analyze", { context });
+        const response = await client.post("/api/analyze", {
+          context: sanitizeContextForTransport(context),
+        });
         const envelope = parseEnvelope(analyzeResponseSchema, response.data);
         if (!envelope.ok) {
+          const code = envelope.error.code;
           throw new ApiClientError(
-            envelope.error.code === "rate_limited"
+            code === "rate_limited"
               ? "rate_limited"
-              : "invalid_response",
+              : code === "unauthorized"
+                ? "unauthorized"
+                : code === "timeout"
+                  ? "timeout"
+                  : code === "upstream_error"
+                    ? "upstream_error"
+                    : code === "server_error"
+                      ? "server_error"
+                      : "invalid_response",
             envelope.error.message,
           );
         }
@@ -117,4 +131,70 @@ export class HttpAIAnalyzer implements AIAnalyzer {
 
 function sleep(ms: number): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+function sanitizeContextForTransport(context: ScanContext): ScanContext {
+  try {
+    const url = new URL(context.url);
+    // Preserve the existing trailing-slash behavior (no "/" appended when
+    // the original URL had none); redact sensitive path segments otherwise.
+    const path =
+      url.pathname === "/" && !context.url.endsWith("/")
+        ? ""
+        : redactPath(url.pathname);
+    const sanitized: ScanContext = {
+      ...context,
+      url: `${url.origin}${path}`,
+    };
+    if (context.pageSignals) {
+      sanitized.pageSignals = {
+        ...context.pageSignals,
+        externalScriptOrigins: context.pageSignals.externalScriptOrigins.slice(0, 50),
+        formActions: context.pageSignals.formActions?.map((action) => ({
+          ...action,
+          actionOrigin: action.actionOrigin ? originOf(action.actionOrigin) : null,
+        })),
+      };
+    }
+    return sanitized;
+  } catch {
+    return { ...context, url: "https://invalid.local/" };
+  }
+}
+
+function originOf(value: string): string | null {
+  try {
+    return new URL(value).origin;
+  } catch {
+    return null;
+  }
+}
+
+const EMAIL_IN_SEGMENT = /[^\s/]*@[^\s/]*/;
+const LONG_OPAQUE_SEGMENT = /^[A-Za-z0-9_-]{24,}$/;
+
+/**
+ * Client-side path redaction (spec §21 rule 1): password-reset tokens, email
+ * addresses, and opaque session ids must not traverse the wire to the backend
+ * — even though the server redacts again before the model and never logs
+ * bodies. Only the path SHAPE is analytically useful, so values are replaced
+ * while the structure is preserved.
+ */
+function redactPath(pathname: string): string {
+  const redacted = pathname
+    .split("/")
+    .map((segment) => {
+      if (segment === "") return segment;
+      let value = segment;
+      try {
+        value = decodeURIComponent(segment);
+      } catch {
+        // Keep the raw segment on malformed encodings.
+      }
+      if (EMAIL_IN_SEGMENT.test(value)) return "[email]";
+      if (LONG_OPAQUE_SEGMENT.test(value)) return "[token]";
+      return segment;
+    })
+    .join("/");
+  return redacted || "/";
 }

@@ -1,4 +1,4 @@
-import type { RiskVerdict } from "@shared/index";
+import type { RiskVerdict, SafeBrowsingStatus } from "@shared/index";
 
 /**
  * Threat-intelligence layer (spec §4–§7).
@@ -20,10 +20,19 @@ export interface ThreatIntelLookupInput {
 export interface ThreatIntelMatch {
   available: boolean;
   matched: boolean;
+  status: "MATCH" | "NO_KNOWN_THREAT" | "UNAVAILABLE";
 
   threatType?: string;
   confidence?: "confirmed" | "high" | "medium";
   source?: string;
+
+  /**
+   * Explicit provider state (spec §2). `LOOKUP_UNAVAILABLE` and `UNKNOWN`
+   * must never be rendered as a clean result.
+   */
+  safeBrowsingStatus: SafeBrowsingStatus;
+  /** Human-readable explanation of degraded coverage, if any. */
+  reason?: string;
 
   checkedAt: number;
   expiresAt?: number;
@@ -49,13 +58,20 @@ interface CachedThreatResult {
   normalizedUrl: string;
   registrableDomain: string | null;
   matched: boolean;
+  status: "MATCH" | "NO_KNOWN_THREAT";
+  safeBrowsingStatus: SafeBrowsingStatus;
   threatType?: string;
   provider: string;
   checkedAt: number;
   expiresAt: number;
 }
 
-const CACHE_KEY = "threatCache";
+/**
+ * Bump when the cached shape or the meaning of a cached status changes, so
+ * entries written by an older build cannot be misread as current evidence.
+ * v2: added `safeBrowsingStatus` and stopped caching provider outages.
+ */
+const CACHE_KEY = "threatCache:v2";
 const CACHE_LIMIT = 500;
 
 /** Confirmed malicious lives long; negatives are short; failures never cached. */
@@ -134,17 +150,26 @@ export class BackendThreatProvider implements ThreatIntelProvider {
       const body = (await response.json()) as {
         available?: boolean;
         matched?: boolean;
+        status?: "MATCH" | "NO_KNOWN_THREAT" | "UNAVAILABLE";
+        safeBrowsingStatus?: SafeBrowsingStatus;
         threatType?: string;
         confidence?: string;
         source?: string;
+        reason?: string;
       };
-      if (body.available !== true) return unavailable();
+      // The backend now reports an outage explicitly. `available !== true`
+      // must stay a hard stop: a provider outage is never a clean result.
+      if (body.available !== true) {
+        return unavailable(body.reason ?? "Threat intelligence provider unavailable.");
+      }
 
       const now = Date.now();
       return {
         available: true,
         matched: body.matched === true,
-        threatType: body.threatType,
+        status: body.status ?? (body.matched === true ? "MATCH" : "NO_KNOWN_THREAT"),
+        safeBrowsingStatus: body.safeBrowsingStatus ?? "UNKNOWN",
+        ...(body.threatType ? { threatType: body.threatType } : {}),
         confidence:
           body.confidence === "confirmed" || body.confidence === "high"
             ? body.confidence
@@ -154,15 +179,22 @@ export class BackendThreatProvider implements ThreatIntelProvider {
       };
     } catch {
       // Network failure / timeout / abort → unknown, NOT benign (§37).
-      return unavailable();
+      return unavailable("Threat intelligence service could not be reached.");
     } finally {
       clearTimeout(timer);
     }
   }
 }
 
-function unavailable(): ThreatIntelMatch {
-  return { available: false, matched: false, checkedAt: Date.now() };
+function unavailable(reason?: string): ThreatIntelMatch {
+  return {
+    available: false,
+    matched: false,
+    status: "UNAVAILABLE",
+    safeBrowsingStatus: "LOOKUP_UNAVAILABLE",
+    ...(reason ? { reason } : {}),
+    checkedAt: Date.now(),
+  };
 }
 
 // ---------------------------------------------------------------------------
@@ -205,8 +237,13 @@ export class LocalFeedProvider implements ThreatIntelProvider {
     return {
       available: true,
       matched,
-      threatType: matched ? "phishing" : undefined,
-      confidence: matched ? "high" : undefined,
+      status: matched ? "MATCH" : "NO_KNOWN_THREAT",
+      // A curated list is not an authoritative provider: a miss here means
+      // "not in our small bundled list", never "no known threat".
+      safeBrowsingStatus: matched ? "KNOWN_MALICIOUS" : "UNKNOWN",
+      ...(matched
+        ? { threatType: "phishing", confidence: "high" as const }
+        : {}),
       source: this.name,
       checkedAt: Date.now(),
     };
@@ -257,7 +294,9 @@ export async function lookupThreatIntelligence(
       match: {
         available: true,
         matched: cached.matched,
-        threatType: cached.threatType,
+        status: cached.status ?? (cached.matched ? "MATCH" : "NO_KNOWN_THREAT"),
+        safeBrowsingStatus: cached.safeBrowsingStatus ?? "UNKNOWN",
+        ...(cached.threatType ? { threatType: cached.threatType } : {}),
         confidence: cached.matched ? "confirmed" : undefined,
         source: cached.provider,
         checkedAt: cached.checkedAt,
@@ -267,8 +306,10 @@ export async function lookupThreatIntelligence(
       evidence: [
         {
           provider: cached.provider,
-          verdict: cached.matched ? "malicious" : "benign",
-          threatType: cached.threatType,
+          // A cached miss is "no known threat", NOT "benign"/safe. The local
+          // feed is a short list; absence from it is weak information.
+          verdict: cached.matched ? "malicious" : "unknown",
+          ...(cached.threatType ? { threatType: cached.threatType } : {}),
           checkedAt: cached.checkedAt,
         },
       ],
@@ -286,7 +327,9 @@ export async function lookupThreatIntelligence(
     normalizedUrl: cacheKey,
     registrableDomain: input.registrableDomain,
     matched: match.matched,
-    threatType: match.threatType,
+    status: match.status === "MATCH" ? "MATCH" : "NO_KNOWN_THREAT",
+    safeBrowsingStatus: match.safeBrowsingStatus,
+    ...(match.threatType ? { threatType: match.threatType } : {}),
     provider: match.source ?? provider.name,
     checkedAt: now,
     expiresAt: now + (match.matched ? TTL_MALICIOUS_MS : TTL_NEGATIVE_MS),
@@ -298,8 +341,10 @@ export async function lookupThreatIntelligence(
     evidence: [
       {
         provider: match.source ?? provider.name,
-        verdict: match.matched ? "malicious" : "benign",
-        threatType: match.threatType,
+        // Spec §2: only a positive match is "malicious". A negative lookup is
+        // "unknown" — labelling it "benign" is how unknown collapses into safe.
+        verdict: match.matched ? "malicious" : "unknown",
+        ...(match.threatType ? { threatType: match.threatType } : {}),
         checkedAt: now,
       },
     ],
@@ -313,7 +358,7 @@ export async function lookupThreatIntelligence(
 export function threatVerdictOverride(match: ThreatIntelMatch): RiskVerdict | null {
   if (!match.available || !match.matched) return null;
   if (match.confidence === "confirmed" || match.confidence === "high") {
-    return "dangerous";
+    return "DANGEROUS";
   }
-  return "high_risk";
+  return "HIGH_RISK";
 }

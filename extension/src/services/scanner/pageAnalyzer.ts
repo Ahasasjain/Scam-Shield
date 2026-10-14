@@ -1,5 +1,24 @@
 import type { DetectionRule } from "./ruleEngine";
-
+export const domainRules: DetectionRule[] = [
+  {
+    id: "domain-newly-registered",
+    name: "Recently registered domain",
+    description:
+      "The domain appears to have been registered recently. Domain age is supporting evidence only and is not proof of fraud.",
+    severity: "medium",
+    points: 8,
+    category: "domain",
+    evaluate: ({ domainSignals }) => ({
+      matched:
+        domainSignals?.available === true &&
+        (domainSignals.domainAgeDays ?? Number.POSITIVE_INFINITY) < 30,
+      explanation:
+        domainSignals?.available === true
+          ? `Domain age is approximately ${domainSignals.domainAgeDays ?? "unknown"} days.`
+          : undefined,
+    }),
+  },
+];
 /**
  * HTTPS / transport-security rules (spec §9).
  * Important: HTTPS only encrypts traffic — it does NOT mean a site is
@@ -34,10 +53,3 @@ export const httpsRules: DetectionRule[] = [
     }),
   },
 ];
-
-/**
- * Domain intelligence rules (spec §10). Real WHOIS/reputation data requires
- * a backend service; V1 reports honestly that this information is
- * unavailable rather than fabricating values.
- */
-export const domainRules: DetectionRule[] = [];

@@ -40,17 +40,52 @@ function flattenExtensionHtml(): Plugin {
 }
 
 /**
+ * Wraps the built content script in an IIFE.
+ *
+ * `output.format` is "es" because the background service worker is a module.
+ * That format does NOT scope a content script's top-level `const`/`let`, so
+ * every re-injection into the same document re-declared the same identifiers
+ * and threw `SyntaxError: Identifier 'w' has already been declared`, killing
+ * the whole script (page signals stopped working entirely).
+ *
+ * The background re-injects `content.js` on every scan, and scans fire from
+ * navigation, tab activation, and SPA route changes — so a single page view
+ * can receive this file many times. Wrapping it makes re-injection harmless
+ * and enforces what this config's comment always claimed.
+ *
+ * Safe because the content entry has no importers and nothing reads its
+ * exports at runtime.
+ */
+function wrapContentScriptInIife(): Plugin {
+  return {
+    name: "wrap-content-script-iife",
+    apply: "build",
+    generateBundle(_options, bundle) {
+      const chunk = bundle["content.js"];
+      if (!chunk || chunk.type !== "chunk") return;
+      const code = typeof chunk.code === "string" ? chunk.code : "";
+      chunk.code = `(function(){\n"use strict";\n${code}\n})();\n`;
+    },
+  };
+}
+
+/**
  * Multi-entry Vite build for Manifest V3:
  * - popup.html / sidepanel.html  → React UIs
  * - background                   → service worker (ES module)
  * - content                      → on-demand content script (IIFE, no imports)
  */
 export default defineConfig(() => ({
-  plugins: [react(), tailwindcss(), flattenExtensionHtml()],
+  plugins: [react(), tailwindcss(), flattenExtensionHtml(), wrapContentScriptInIife()],
   define: {
     // Baked at build time — end users never configure an API endpoint.
     // Set SCAMSHIELD_API_URL when building for production.
-    __SCAMSHIELD_API_URL__: JSON.stringify(process.env.SCAMSHIELD_API_URL ?? ""),
+    __SCAMSHIELD_API_URL__: JSON.stringify(
+      process.env.SCAMSHIELD_API_URL ?? "http://localhost:8787",
+    ),
+    __SCAMSHIELD_AI_ALWAYS_RUN__: JSON.stringify(
+      process.env.SCAMSHIELD_AI_ALWAYS_RUN === "true",
+    ),
   },
   resolve: {
     alias: {

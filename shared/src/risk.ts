@@ -56,12 +56,12 @@ export const RISK_LEVEL_LABELS: Record<RiskLevel, string> = {
  * `unknown` means the system lacked evidence — never rendered as safe.
  */
 export type RiskVerdict =
-  | "known_safe"
-  | "low_risk"
-  | "suspicious"
-  | "high_risk"
-  | "dangerous"
-  | "unknown";
+  | "SAFE"
+  | "LOW_RISK"
+  | "SUSPICIOUS"
+  | "HIGH_RISK"
+  | "DANGEROUS"
+  | "UNKNOWN";
 
 export type Confidence = "high" | "medium" | "low" | "unknown";
 
@@ -75,23 +75,33 @@ export interface DetectionCoverage {
   reputation: boolean;
 }
 
+/**
+ * Headline labels.
+ *
+ * SPEC §21 probabilistic-language rule: no component may assert certainty.
+ * "Verified safe" and "It is a known phishing site" are both unqualified
+ * claims, so neither appears here. Even DANGEROUS is phrased as a
+ * well-evidenced assessment rather than a proven fact.
+ */
 export const VERDICT_LABELS: Record<RiskVerdict, string> = {
-  known_safe: "Verified safe",
-  low_risk: "Low risk",
-  suspicious: "Suspicious website",
-  high_risk: "High-risk website",
-  dangerous: "Dangerous website",
-  unknown: "Limited information",
+  SAFE: "No known threats found",
+  LOW_RISK: "Low risk",
+  SUSPICIOUS: "Suspicious website",
+  HIGH_RISK: "High-risk website",
+  DANGEROUS: "Likely dangerous website",
+  UNKNOWN: "Not enough information",
 };
 
 export const VERDICT_RECOMMENDATIONS: Record<RiskVerdict, string> = {
-  known_safe: "This domain is verified as the official organization it claims to be.",
-  low_risk:
+  SAFE:
+    "No known threat was found and the evidence available supports this site. This is not a guarantee that it is safe.",
+  LOW_RISK:
     "No significant indicators detected. As always, stay alert for unusual requests.",
-  suspicious:
+  SUSPICIOUS:
     "Do not enter passwords, card details, or personal information on this website.",
-  high_risk: "Leave this website. Do not enter any information.",
-  dangerous: "Leave this website immediately. It is a known phishing/threat.",
-  unknown:
+  HIGH_RISK: "Leave this website. Do not enter any information.",
+  DANGEROUS:
+    "Leave this website immediately. Multiple strong indicators of phishing or malware were found.",
+  UNKNOWN:
     "No known threat was found, but this website could not be fully verified. Proceed with caution.",
 };

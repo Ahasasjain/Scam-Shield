@@ -8,6 +8,18 @@ interface AIAnalysisProps {
     | { status: "disabled" };
 }
 
+function isAiResult(value: unknown): value is AiAnalysisResult {
+  if (typeof value !== "object" || value === null) return false;
+  const result = value as Record<string, unknown>;
+  return (
+    typeof result["summary"] === "string" &&
+    typeof result["recommendation"] === "string" &&
+    typeof result["confidence"] === "number" &&
+    Number.isFinite(result["confidence"]) &&
+    Array.isArray(result["indicators"])
+  );
+}
+
 /**
  * AI analysis card (spec §14–§18). Renders validated AI results, the
  * graceful-unavailable message, or nothing when AI is off.
@@ -21,9 +33,9 @@ export function AIAnalysis({ ai }: AIAnalysisProps) {
     return (
       <section
         aria-label="AI analysis unavailable"
-        className="ss-animate-in rounded-xl border border-neutral-200 bg-neutral-50 p-3 text-xs text-neutral-600 dark:border-neutral-800 dark:bg-neutral-900 dark:text-neutral-400"
+        className="rounded-2xl border border-slate-200/80 bg-white p-3.5 text-xs text-slate-500 shadow-sm dark:border-white/10 dark:bg-white/5 dark:text-slate-400"
       >
-        <p className="font-medium text-neutral-800 dark:text-neutral-200">
+        <p className="font-semibold text-slate-800 dark:text-slate-200">
           AI analysis unavailable.
         </p>
         <p className="mt-1">{ai.reason}</p>
@@ -34,10 +46,28 @@ export function AIAnalysis({ ai }: AIAnalysisProps) {
 
   const result = ai.result as AiAnalysisResult;
 
+  // Defensive: the result crosses a trust boundary (AI provider → server →
+  // worker → UI). A malformed payload must degrade to the unavailable card,
+  // never crash the whole dashboard (there is no second chance to render).
+  if (!isAiResult(result)) {
+    return (
+      <section
+        aria-label="AI analysis unavailable"
+        className="rounded-2xl border border-slate-200/80 bg-white p-3.5 text-xs text-slate-500 shadow-sm dark:border-white/10 dark:bg-white/5 dark:text-slate-400"
+      >
+        <p className="font-semibold text-slate-800 dark:text-slate-200">
+          AI analysis unavailable.
+        </p>
+        <p className="mt-1">The AI service returned an unexpected response.</p>
+        <p className="mt-1">Your rule-based security scan is still available.</p>
+      </section>
+    );
+  }
+
   return (
     <section
       aria-label="AI analysis"
-      className="ss-animate-in rounded-xl border border-violet-200 bg-violet-50/60 p-3 dark:border-violet-900 dark:bg-violet-950/40"
+      className="rounded-2xl border border-violet-500/25 bg-gradient-to-br from-violet-500/[0.10] to-fuchsia-500/[0.05] p-3.5 shadow-sm dark:border-violet-400/20"
     >
       <button
         type="button"

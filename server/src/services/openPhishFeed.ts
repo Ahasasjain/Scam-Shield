@@ -33,17 +33,38 @@ let feed: FeedData = {
 };
 let refreshTimer: NodeJS.Timeout | null = null;
 
+/** A feed older than this is treated as stale coverage, not a clean bill of health. */
+const FEED_STALE_AFTER_MS = 6 * 60 * 60 * 1000; // 6h (2x refresh interval)
+
 export function getFeed(): FeedData {
   return feed;
 }
 
+/**
+ * Feed health (spec §2: unknown is not safe).
+ *
+ * An unloaded or stale feed must NOT be reported as "checked, nothing found",
+ * otherwise a provider outage silently degrades into a false negative.
+ */
+export function getFeedStatus(): {
+  loaded: boolean;
+  stale: boolean;
+  entryCount: number;
+  lastUpdated: number;
+} {
+  const loaded = feed.urls.size > 0;
+  const stale = loaded && Date.now() - feed.lastUpdated > FEED_STALE_AFTER_MS;
+  return { loaded, stale, entryCount: feed.entryCount, lastUpdated: feed.lastUpdated };
+}
+
 export async function refreshFeed(feedUrl?: string): Promise<boolean> {
   const url = feedUrl ?? process.env["THREAT_FEED_URL"] ?? DEFAULT_FEED_URL;
+  const controller = new AbortController();
+  const timer = setTimeout(() => {
+    controller.abort();
+  }, 30_000);
   try {
-    const controller = new AbortController();
-    const timer = setTimeout(() => controller.abort(), 30_000);
     const response = await fetch(url, { signal: controller.signal });
-    clearTimeout(timer);
     if (!response.ok) {
       logger.warn({ status: response.status }, "threat feed download failed");
       return false;
@@ -70,6 +91,10 @@ export async function refreshFeed(feedUrl?: string): Promise<boolean> {
   } catch (error) {
     logger.warn({ error }, "threat feed refresh failed");
     return false;
+  } finally {
+    // Must clear on every path — the early `return false` above would
+    // otherwise keep a 30s handle alive per failed refresh.
+    clearTimeout(timer);
   }
 }
 
@@ -78,6 +103,8 @@ export function startFeedRefresh(): void {
   void refreshFeed();
   if (refreshTimer) clearInterval(refreshTimer);
   refreshTimer = setInterval(() => void refreshFeed(), REFRESH_INTERVAL_MS);
+  // Do not hold the event loop open on shutdown.
+  refreshTimer.unref?.();
 }
 
 export function stopFeedRefresh(): void {

@@ -11,13 +11,13 @@ Chrome Extension (extension/dist)          Backend (server/)
 ├── Rule engine (local, always on)   ───►  /api/threat-lookup
 ├── Bundled local threat feed              ├── OpenPhish feed (auto-refreshed)
 └── Optional AI analysis            ───►  /api/analyze
-                                          └── Any OpenAI-compatible API
+                                          └── Groq API (server-side key)
 ```
 
 The extension works without the backend. With it, you get:
 
 - **OpenPhish feed** — millions of live phishing URLs, refreshed every 30 minutes
-- **AI analysis** — provider-agnostic; works with OpenAI, Azure, Groq, Together, OpenRouter, Mistral, Fireworks, Ollama, or any OpenAI-compatible endpoint (key stays server-side)
+- **AI analysis** — optional Groq enrichment using `openai/gpt-oss-120b`; the key stays server-side and local detection never depends on AI
 
 ---
 
@@ -28,21 +28,26 @@ The extension works without the backend. With it, you get:
 1. Push this repo to GitHub (done: `github.com/Ahasasjain/Scam-Shield`).
 2. Go to [dashboard.render.com](https://dashboard.render.com) → **New → Web Service**.
 3. Connect your GitHub repo.
-4. Settings:
-   - **Root directory**: `server`
-   - **Build command**: `pnpm install && pnpm build`
-   - **Start command**: `pnpm start`
+4. Settings (**Root directory must be the repo root**, not `server/` — the
+   backend depends on the `@scamshield/shared` workspace package, and the
+   `workspace:*` protocol only resolves from the repo root):
+   - **Root directory**: `.` (repo root — leave blank/default)
+   - **Build command**: `corepack enable && pnpm install --frozen-lockfile && pnpm --filter @scamshield/server build`
+   - **Start command**: `pnpm --filter @scamshield/server start`
    - **Instance type**: Free
-5. Environment variables:
+5. Environment variables (Render provides `PORT` automatically — do not set it):
    ```
    NODE_ENV=production
-   AI_PROVIDER=openai              # openai | azure | groq | together | openrouter | mistral | fireworks | ollama | custom
-   AI_API_KEY=sk-proj-...          # your key for that provider
-   AI_MODEL=gpt-4o-mini            # leave blank to use the provider's default
+   GROQ_API_KEY=gsk_...                      # server-side only
+   GROQ_MODEL=openai/gpt-oss-120b
+   GOOGLE_SAFEBROWSING_API_KEY=...           # strongly recommended
    ALLOWED_EXTENSION_ORIGINS=chrome-extension://<YOUR_EXTENSION_ID>
    RATE_LIMIT_MAX=60
    RATE_LIMIT_WINDOW_MINUTES=15
+   THREAT_RATE_LIMIT_MAX=600
+   THREAT_RATE_LIMIT_WINDOW_MINUTES=15
    THREAT_FEED_URL=https://openphish.com/feed.txt
+   LOG_LEVEL=info
    ```
 6. Click **Create Web Service**. You'll get a URL like `https://scamshield-xxxx.onrender.com`.
 7. Verify: open `https://<your-url>/api/health` → should return `{"ok":true,...}`.
@@ -60,104 +65,33 @@ railway up
 # Then set env vars in the Railway dashboard (same list as above).
 ```
 
-### AI provider configuration
+### Groq configuration
 
-The `/api/analyze` endpoint speaks the **OpenAI Chat Completions** protocol, so it works with OpenAI and with any provider that exposes an OpenAI-compatible API. Pick a provider with `AI_PROVIDER` and the server fills in the base URL and default model for you.
+The `/api/analyze` endpoint uses Groq only. The server calls Groq's OpenAI-compatible HTTP endpoint internally, but there is no OpenAI, Gemini, Claude, or OpenRouter fallback.
 
-| `AI_PROVIDER` | Base URL                                            | Default model                        | API key env          |
-| ------------- | --------------------------------------------------- | ------------------------------------ | -------------------- |
-| `openai`      | `https://api.openai.com/v1`                         | `gpt-4o-mini`                        | `AI_API_KEY`         |
-| `azure`       | _you provide_ (your deployment endpoint)           | _required_ (your deployment name)    | `AI_API_KEY`         |
-| `groq`        | `https://api.groq.com/openai/v1`                    | `llama-3.1-70b-versatile`            | `AI_API_KEY`         |
-| `together`    | `https://api.together.xyz/v1`                       | `meta-llama/Meta-Llama-3.1-70B-Instruct-Turbo` | `AI_API_KEY` |
-| `openrouter`  | `https://openrouter.ai/api/v1`                      | `anthropic/claude-3.5-sonnet`        | `AI_API_KEY`         |
-| `mistral`     | `https://api.mistral.ai/v1`                         | `mistral-small-latest`               | `AI_API_KEY`         |
-| `fireworks`   | `https://api.fireworks.ai/inference/v1`             | `accounts/fireworks/models/llama-v3p1-70b-instruct` | `AI_API_KEY` |
-| `ollama`      | `http://localhost:11434/v1`                         | `llama3.1`                           | `AI_API_KEY=ollama` (any value) |
-| `custom`      | _you provide_ (`AI_BASE_URL`)                       | _required_ (`AI_MODEL`)              | `AI_API_KEY`         |
-
-#### Examples
-
-OpenAI (default — what the codebase used to hardcode):
 ```env
-AI_PROVIDER=openai
-AI_API_KEY=sk-proj-...
-AI_MODEL=gpt-4o-mini
+GROQ_API_KEY=gsk_...
+GROQ_MODEL=openai/gpt-oss-120b
 ```
 
-Groq (very fast Llama inference, generous free tier):
-```env
-AI_PROVIDER=groq
-AI_API_KEY=gsk_...
-AI_MODEL=llama-3.1-70b-versatile
-```
+Groq calls are made only when local evidence is meaningful. HTTPS, an ordinary login/payment form, a long URL, an uncommon TLD, or a brand word alone does not trigger AI.
 
-OpenRouter (one key, hundreds of models):
-```env
-AI_PROVIDER=openrouter
-AI_API_KEY=sk-or-...
-AI_MODEL=anthropic/claude-3.5-sonnet
-```
-
-Azure OpenAI (use your full deployment URL as `AI_BASE_URL`):
-```env
-AI_PROVIDER=azure
-AI_API_KEY=<your-azure-key>
-AI_BASE_URL=https://<resource>.openai.azure.com/openai/deployments/<deployment>
-AI_MODEL=<deployment-name>
-```
-
-Ollama (fully local, no key needed):
-```env
-AI_PROVIDER=ollama
-AI_API_KEY=ollama
-AI_MODEL=llama3.1
-```
-
-LM Studio or any other OpenAI-compatible endpoint (point at it directly):
-```env
-AI_PROVIDER=custom
-AI_BASE_URL=http://localhost:1234/v1
-AI_API_KEY=lm-studio
-AI_MODEL=local-model
-```
-
-> You can also leave `AI_PROVIDER` blank and just set `AI_BASE_URL` + `AI_MODEL` + `AI_API_KEY` — the server treats that the same as `AI_PROVIDER=custom`. This is the easiest way to point at a new provider without editing the registry.
-
-Notes:
-- Some providers (Ollama, LM Studio, vLLM, custom proxies) don't support OpenAI's `response_format: { type: "json_object" }`. ScamShield automatically detects those and falls back to free-form completions, then strips any ```` ```json ```` wrappers from the response.
-- Model names change often. If a provider ships a new default, just override `AI_MODEL` — you don't need to redeploy code.
-- Keep `AI_API_KEY` server-side only. The extension never sees it.
+If Groq fails, ScamShield returns local/threat-intelligence evidence in `Non-AI` mode with a coverage limitation. It makes no provider fallback request.
 
 ---
 
 ### Option C: Docker (any VPS)
 
-Create `server/Dockerfile`:
-
-```dockerfile
-FROM node:20-alpine AS build
-WORKDIR /app
-RUN corepack enable
-COPY package.json pnpm-lock.yaml ./
-RUN pnpm install --frozen-lockfile
-COPY . .
-RUN pnpm build
-
-FROM node:20-alpine
-WORKDIR /app
-COPY --from=build /app/dist ./dist
-COPY package.json ./
-RUN npm i express@4 helmet cors express-rate-limit dotenv pino openai zod @scamshield/shared
-EXPOSE 8787
-CMD ["node", "dist/index.js"]
-```
+A production `server/Dockerfile` is committed (multi-stage, non-root user,
+healthcheck). Build from the **repo root** so the workspace resolves:
 
 ```bash
-docker build -t scamshield-api ./server
+docker build -f server/Dockerfile -t scamshield-api .
 docker run -d -p 8787:8787 \
   -e NODE_ENV=production \
-  -e AI_API_KEY=sk-proj-... \
+  -e GROQ_API_KEY=gsk_... \
+  -e GROQ_MODEL=openai/gpt-oss-120b \
+  -e GOOGLE_SAFEBROWSING_API_KEY=... \
   -e ALLOWED_EXTENSION_ORIGINS="chrome-extension://<ID>" \
   scamshield-api
 ```
@@ -251,8 +185,8 @@ curl -X POST https://<your-url>/api/threat-lookup \
 # → {"available":true,"matched":false}
 
 # 3. Extension end-to-end
-#    Visit google.com → 🛡️ Verified safe
-#    Visit any paypa1.com-style domain → 🛑 Dangerous
+#    Visit google.com → "No known threats found" verdict
+#    Visit any paypa1.com-style domain → "Likely dangerous website" verdict
 #    Auto-scan warns via side panel/badge on suspicious pages
 ```
 
@@ -274,10 +208,10 @@ Extension version bumps go in `extension/public/manifest.json` and `extension/pa
 
 ## Troubleshooting
 
-| Symptom                                    | Fix                                                                                                  |
-| ------------------------------------------ | ---------------------------------------------------------------------------------------------------- |
-| "Threat intelligence unavailable" persists | Backend down or URL wrong — check `/api/health`; check browser console of the service worker         |
-| AI card says unavailable                   | `AI_API_KEY` missing/invalid on backend; check backend logs (also verify `AI_PROVIDER` + `AI_BASE_URL` for non-OpenAI providers) |
-| CORS errors in service worker console      | `ALLOWED_EXTENSION_ORIGINS` doesn't match your extension ID                                          |
-| Feed empty (`entryCount: 0`)               | Network egress blocked from host, or OpenPhish rate-limited — logs show `threat feed refresh failed` |
-| Auto-scan not firing                       | Reload extension after update; settings migration applies once per version bump                      |
+| Symptom                                    | Fix                                                                                                       |
+| ------------------------------------------ | --------------------------------------------------------------------------------------------------------- |
+| "Threat intelligence unavailable" persists | Backend down or URL wrong — check `/api/health`; check browser console of the service worker              |
+| AI card says unavailable                   | `GROQ_API_KEY` missing/invalid, rate-limited, timed out, or unavailable; local analysis remains available |
+| CORS errors in service worker console      | `ALLOWED_EXTENSION_ORIGINS` doesn't match your extension ID                                               |
+| Feed empty (`entryCount: 0`)               | Network egress blocked from host, or OpenPhish rate-limited — logs show `threat feed refresh failed`      |
+| Auto-scan not firing                       | Reload extension after update; settings migration applies once per version bump                           |

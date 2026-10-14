@@ -161,6 +161,12 @@ describe("classifyDomain — attacker patterns MUST be flagged", () => {
     expect(identity.relationship).toBe("brand-in-subdomain");
   });
 
+  it("fakebook brand in unrelated subdomain", () => {
+    const identity = classifyDomain("fakebook.khoury.northeastern.edu");
+    expect(identity.detectedBrand).toBe("facebook");
+    expect(identity.relationship).toBe("brand-in-subdomain");
+  });
+
   it("homoglyph lookalike domain", () => {
     const identity = classifyDomain("paypa1.example");
     expect(identity.relationship).toBe("lookalike");
