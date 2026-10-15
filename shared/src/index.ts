@@ -188,7 +188,8 @@ export type ExtensionMessage =
   | { type: "SCAN_WEBSITE"; payload: ScanRequest }
   | { type: "GET_SETTINGS" }
   | { type: "GET_LAST_SCAN"; payload: ScanRequest }
-  | { type: "PAGE_NAVIGATED"; url: string };
+  | { type: "PAGE_NAVIGATED"; url: string }
+  | { type: "BYPASS_BLOCK"; url: string };
 
 /**
  * Reuses the verdict the background worker already computed for a tab.

@@ -91,10 +91,10 @@ export function PrivacyExplainer() {
             <p>
               Only the sanitised security metadata above is sent to the
               ScamShield analysis service, and only when the local evidence
-              shows a case is genuinely ambiguous. Your API keys stay on the
-              server. Query strings, URL fragments, and sensitive path
-              segments such as password-reset tokens or email addresses are
-              redacted before anything is transmitted.
+              shows a case is genuinely ambiguous. Query strings, URL
+              fragments, and sensitive path segments such as password-reset
+              tokens or email addresses are redacted before anything is
+              transmitted.
             </p>
           </section>
 

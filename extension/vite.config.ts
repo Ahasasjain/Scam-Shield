@@ -20,6 +20,7 @@ function flattenExtensionHtml(): Plugin {
       const moves: Array<[string, string]> = [
         ["src/popup/index.html", "popup.html"],
         ["src/sidepanel/index.html", "sidepanel.html"],
+        ["src/blocked/index.html", "blocked.html"],
       ];
       let moved = false;
       for (const [from, to] of moves) {
@@ -71,7 +72,7 @@ function wrapContentScriptInIife(): Plugin {
 
 /**
  * Multi-entry Vite build for Manifest V3:
- * - popup.html / sidepanel.html  → React UIs
+ * - popup.html / sidepanel.html / blocked.html → React UIs
  * - background                   → service worker (ES module)
  * - content                      → on-demand content script (IIFE, no imports)
  */
@@ -102,6 +103,7 @@ export default defineConfig(() => ({
       input: {
         popup: resolve(root, "src/popup/index.html"),
         sidepanel: resolve(root, "src/sidepanel/index.html"),
+        blocked: resolve(root, "src/blocked/index.html"),
         background: resolve(root, "src/background/index.ts"),
         content: resolve(root, "src/content/index.ts"),
       },

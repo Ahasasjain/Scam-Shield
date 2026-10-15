@@ -1,4 +1,5 @@
 import type { ExtensionSettings, ThemeSetting } from "@shared/index";
+import { useRedirectTracking } from "@/hooks/useExtensionState";
 
 interface SettingsPanelProps {
   settings: ExtensionSettings;
@@ -10,6 +11,8 @@ const THEMES: ThemeSetting[] = ["light", "dark", "system"];
 
 /** Settings (spec §25) — honest privacy explanation, no overclaiming. */
 export function SettingsPanel({ settings, onUpdate, onReset }: SettingsPanelProps) {
+  const { granted: redirectGranted, request: requestRedirect } = useRedirectTracking();
+
   return (
     <div className="space-y-3">
       <div className="flex items-center justify-between gap-3 rounded-2xl border border-slate-200/80 bg-white px-4 py-3 shadow-sm dark:border-white/10 dark:bg-white/5">
@@ -67,6 +70,32 @@ export function SettingsPanel({ settings, onUpdate, onReset }: SettingsPanelProp
           ))}
         </div>
       </div>
+
+      {/* Shown only when action is needed: a permanent "everything is on"
+          row is noise, and users never look for it. When tracking is granted,
+          scans simply report the chain as checked. */}
+      {redirectGranted === false && (
+        <section className="rounded-2xl border border-slate-200/80 bg-white p-4 text-xs leading-relaxed text-slate-500 shadow-sm dark:border-white/10 dark:bg-white/5 dark:text-slate-400">
+          <div className="flex items-center justify-between gap-3">
+            <div className="min-w-0">
+              <h3 className="text-sm font-semibold tracking-tight text-slate-900 dark:text-white">
+                Redirect-chain tracking
+              </h3>
+              <p className="mt-0.5">
+                Off — scans report redirects as unavailable. Grant the optional
+                browser permission to enable it.
+              </p>
+            </div>
+            <button
+              type="button"
+              onClick={() => void requestRedirect()}
+              className="min-h-[32px] shrink-0 rounded-xl bg-gradient-to-b from-emerald-500 to-emerald-700 px-3.5 text-xs font-bold text-white shadow-sm shadow-emerald-600/25 transition-all duration-150 hover:from-emerald-600 hover:to-emerald-700 active:scale-[0.98]"
+            >
+              Grant
+            </button>
+          </div>
+        </section>
+      )}
 
       <section className="rounded-2xl border border-slate-200/80 bg-white p-4 text-xs leading-relaxed text-slate-500 shadow-sm dark:border-white/10 dark:bg-white/5 dark:text-slate-400">
         <h3 className="mb-1 text-sm font-semibold tracking-tight text-slate-900 dark:text-white">

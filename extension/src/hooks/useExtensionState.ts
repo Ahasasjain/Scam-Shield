@@ -98,3 +98,68 @@ export function useTheme(theme: ThemeSetting | undefined): void {
     }
   }, [theme]);
 }
+
+function extensionPermissions():
+  | { contains: (p: { permissions: string[] }) => Promise<boolean>; request: (p: { permissions: string[] }) => Promise<boolean> }
+  | undefined {
+  if (typeof chrome === "undefined") return undefined;
+  const permissions = (chrome as { permissions?: unknown }).permissions as
+    | {
+        contains?: (p: { permissions: string[] }) => Promise<boolean>;
+        request?: (p: { permissions: string[] }) => Promise<boolean>;
+      }
+    | undefined;
+  if (typeof permissions?.contains !== "function") return undefined;
+  return permissions as {
+    contains: (p: { permissions: string[] }) => Promise<boolean>;
+    request: (p: { permissions: string[] }) => Promise<boolean>;
+  };
+}
+
+/**
+ * Tracks the optional `webNavigation` permission that powers redirect-chain
+ * coverage. `null` while the state is unknown. The request must run inside a
+ * user gesture (button click) — programmatic requests without one fail.
+ */
+export function useRedirectTracking(): {
+  granted: boolean | null;
+  request: () => Promise<boolean>;
+} {
+  const [granted, setGranted] = useState<boolean | null>(null);
+
+  useEffect(() => {
+    let cancelled = false;
+    const permissions = extensionPermissions();
+    if (!permissions) {
+      setGranted(false);
+      return;
+    }
+    void permissions.contains({ permissions: ["webNavigation"] }).then(
+      (ok) => {
+        if (!cancelled) setGranted(ok);
+      },
+      () => {
+        if (!cancelled) setGranted(false);
+      },
+    );
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  const request = useCallback(async () => {
+    try {
+      const ok = await extensionPermissions()?.request({
+        permissions: ["webNavigation"],
+      });
+      const grantedNow = ok === true;
+      setGranted(grantedNow);
+      return grantedNow;
+    } catch {
+      setGranted(false);
+      return false;
+    }
+  }, []);
+
+  return { granted, request };
+}

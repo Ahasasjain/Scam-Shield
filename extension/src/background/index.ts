@@ -141,6 +141,18 @@ chrome.runtime.onMessage.addListener((message: unknown, sender, sendResponse) =>
         void maybeAutoScan(sender.tab.id, msg.url);
       }
       return false;
+
+    case "BYPASS_BLOCK": {
+      // Sent by the block page's "Continue anyway" before it navigates back.
+      // Recorded first so the return navigation cannot re-trigger the block.
+      const tabId = sender.tab?.id;
+      const url = (msg as { url?: unknown }).url;
+      if (typeof tabId === "number" && typeof url === "string") {
+        blockBypasses.set(tabId, { url, at: Date.now() });
+      }
+      sendResponse({ ok: true });
+      return false;
+    }
     default:
       return false;
   }
@@ -202,10 +214,11 @@ async function handleScanWebsite(
     };
   }
 
-  const [pageSignals, redirectSignals] = await Promise.all([
+  const [pageSignals, redirect] = await Promise.all([
     collectPageSignals(payload.tabId),
     collectRedirectSignals(payload.tabId),
   ]);
+  const redirectSignals = redirect.signals;
 
   // Scan cache (spec §17, §19): the same URL with unchanged page/redirect
   // signals reuses the previous verdict instead of repeating the RDAP lookup,
@@ -215,7 +228,7 @@ async function handleScanWebsite(
   const pageHash = hashSignals({ page: pageSignals, redirects: redirectSignals });
   if (!payload.force) {
     const hit = scanCache.get(validated.url);
-    if (hit && Date.now() - hit.at < SCAN_CACHE_TTL_MS && hit.pageHash === pageHash) {
+    if (hit && Date.now() < hit.expiresAt && hit.pageHash === pageHash) {
       const cacheAgeMs = Date.now() - hit.at;
       lastScanByTab.set(payload.tabId, {
         url: validated.url,
@@ -350,19 +363,22 @@ async function handleScanWebsite(
     };
   }
 
-  // Let the page-level content script know when a scan reaches a high-risk
-  // or dangerous verdict, so it can stop risky form submissions before the
-  // browser leaves the page. This is a page-local privacy-safe notification.
+  // Deliver the verdict to the page so it can warn on visit and arm
+  // submit protection. The listener is NOT guaranteed to exist: cached scans
+  // skip injection, and injection can fail on restricted pages — so probe
+  // first and inject on demand instead of firing into the void.
   try {
-    await chrome.tabs.sendMessage(payload.tabId, {
-      type: "SET_SCAN_RISK_STATE",
-      verdict,
-      showWarning:
-        verdict === "SUSPICIOUS" || verdict === "HIGH_RISK" || verdict === "DANGEROUS",
-    });
+    if (await ensureContentScript(payload.tabId)) {
+      await chrome.tabs.sendMessage(payload.tabId, {
+        type: "SET_SCAN_RISK_STATE",
+        verdict,
+        showWarning:
+          verdict === "SUSPICIOUS" || verdict === "HIGH_RISK" || verdict === "DANGEROUS",
+      });
+    }
   } catch {
-    // The content script may not be available on some pages; the scan outcome
-    // remains authoritative and we should never fail the scan for that.
+    // The page cannot show warnings (restricted page, no access); the scan
+    // outcome remains authoritative and we never fail the scan for that.
   }
 
   const coverage: DetectionCoverage = {
@@ -408,6 +424,7 @@ async function handleScanWebsite(
     coverageV2,
     aiStatus.status === "enabled",
     threat.match,
+    redirect.permissionGranted,
   );
 
   const durationMs = Date.now() - startedAt;
@@ -455,8 +472,17 @@ async function handleScanWebsite(
   });
 
   // Populate the scan cache (keyed by normalized URL + page hash). Cached
-  // hits never append a duplicate history entry.
-  scanCache.set(validated.url, { at: Date.now(), pageHash, payload: result });
+  // hits never append a duplicate history entry. A verdict missing redirect
+  // coverage gets a SHORT TTL: that slice can flip to "checked" at any moment
+  // (late chain write, freshly granted permission), and a 5-minute freeze is
+  // exactly how a transient miss looked permanent.
+  const cacheTtlMs = coverage.redirects ? SCAN_CACHE_TTL_MS : SCAN_CACHE_SHORT_TTL_MS;
+  scanCache.set(validated.url, {
+    at: Date.now(),
+    expiresAt: Date.now() + cacheTtlMs,
+    pageHash,
+    payload: result,
+  });
   while (scanCache.size > SCAN_CACHE_MAX) {
     const oldest = scanCache.keys().next();
     if (oldest.done) break;
@@ -499,11 +525,18 @@ const LAST_SCAN_TTL_MS = 5 * 60 * 1000;
  */
 const scanCache = new Map<
   string,
-  { at: number; pageHash: string; payload: ScanResultPayload }
+  { at: number; expiresAt: number; pageHash: string; payload: ScanResultPayload }
 >();
 
 /** Freshness window for a cached verdict. */
 const SCAN_CACHE_TTL_MS = 5 * 60 * 1000;
+
+/**
+ * Short TTL for verdicts missing redirect coverage. The redirect slice can
+ * appear at any moment (late chain write landing, permission just granted),
+ * so a full 5-minute freeze would present a transient miss as a stable gap.
+ */
+const SCAN_CACHE_SHORT_TTL_MS = 60 * 1000;
 
 /** Upper bound so long browsing sessions can't grow the map without limit. */
 const SCAN_CACHE_MAX = 100;
@@ -556,6 +589,28 @@ async function handleGetLastScan(
 }
 
 /** Injects the content script on demand and collects page signals. */
+async function ensureContentScript(tabId: number): Promise<boolean> {
+  // A cached scan skips collection, and injection can fail on restricted
+  // pages — so the verdict listener is never guaranteed to exist. Probe
+  // first, inject on demand, and only then deliver the verdict.
+  try {
+    await chrome.tabs.sendMessage(tabId, { type: "PING" });
+    return true;
+  } catch {
+    // No listener in this document — inject and retry once.
+  }
+  try {
+    await chrome.scripting.executeScript({
+      target: { tabId },
+      files: ["content.js"],
+    });
+    await chrome.tabs.sendMessage(tabId, { type: "PING" });
+    return true;
+  } catch {
+    return false;
+  }
+}
+
 async function collectPageSignals(tabId: number): Promise<PageSignals | null> {
   try {
     await chrome.scripting.executeScript({
@@ -582,18 +637,34 @@ async function collectPageSignals(tabId: number): Promise<PageSignals | null> {
 /**
  * Redirect chain via webNavigation if the optional permission is granted;
  * otherwise unavailable (reported honestly, never guessed).
+ *
+ * Returns the permission state alongside the signals so the verdict can
+ * explain a miss accurately ("reload the page" vs "grant the permission").
  */
-async function collectRedirectSignals(tabId: number): Promise<RedirectSignals | null> {
-  const hasPermission = await chrome.permissions.contains({
-    permissions: ["webNavigation"],
-  });
-  if (!hasPermission) return null;
-  const state = redirectState.get(tabId);
-  if (!state) return null;
+async function collectRedirectSignals(tabId: number): Promise<{
+  signals: RedirectSignals | null;
+  permissionGranted: boolean;
+}> {
+  let hasPermission = false;
+  try {
+    hasPermission = await chrome.permissions.contains({
+      permissions: ["webNavigation"],
+    });
+  } catch {
+    // A permissions-API failure must degrade to "unavailable", never fail
+    // the whole scan (this runs inside Promise.all with page signals).
+    return { signals: null, permissionGranted: false };
+  }
+  if (!hasPermission) return { signals: null, permissionGranted: false };
+  const state = await readRedirectChainWithGrace(tabId);
+  if (!state) return { signals: null, permissionGranted: true };
   return {
-    chainLength: state.chainLength,
-    crossOriginHops: state.crossOriginHops,
-    finalUrl: state.finalUrl,
+    signals: {
+      chainLength: state.chainLength,
+      crossOriginHops: state.crossOriginHops,
+      finalUrl: state.finalUrl,
+    },
+    permissionGranted: true,
   };
 }
 
@@ -605,50 +676,190 @@ async function collectRedirectSignals(tabId: number): Promise<RedirectSignals | 
 const AUTO_SCAN_DEBOUNCE_MS = 15_000;
 const lastAutoScan = new Map<number, { url: string; at: number }>();
 const activeAutoScans = new Set<number>();
-const redirectState = new Map<
-  number,
-  {
-    chainLength: number;
-    crossOriginHops: number;
-    lastOrigin: string | null;
-    finalUrl: string;
+
+interface RedirectChainState {
+  chainLength: number;
+  crossOriginHops: number;
+  lastOrigin: string | null;
+  finalUrl: string;
+}
+
+const REDIRECT_CHAIN_KEY_PREFIX = "redirectChain:";
+
+function redirectChainKey(tabId: number): string {
+  return `${REDIRECT_CHAIN_KEY_PREFIX}${tabId}`;
+}
+
+/**
+ * Redirect chains live in chrome.storage.session — NOT a module-level Map.
+ *
+ * A module Map is wiped on every service-worker suspend/restart (which is
+ * constant in MV3), so a manually-triggered scan almost always found an
+ * empty map and reported "Redirect chain: unavailable" even with the
+ * permission granted. Session storage survives worker restarts within the
+ * browser session and is purpose-built for this.
+ */
+async function readRedirectChain(tabId: number): Promise<RedirectChainState | null> {  try {
+    const key = redirectChainKey(tabId);
+    const stored = await chrome.storage.session.get(key);
+    const state = stored[key] as Partial<RedirectChainState> | undefined;
+    if (
+      typeof state !== "object" ||
+      state === null ||
+      typeof state.chainLength !== "number" ||
+      typeof state.crossOriginHops !== "number" ||
+      typeof state.finalUrl !== "string"
+    ) {
+      return null;
+    }
+    return {
+      chainLength: state.chainLength,
+      crossOriginHops: state.crossOriginHops,
+      lastOrigin: typeof state.lastOrigin === "string" ? state.lastOrigin : null,
+      finalUrl: state.finalUrl,
+    };
+  } catch {
+    return null;
   }
->();
+}
 
-chrome.webNavigation?.onBeforeNavigate.addListener((details) => {
-  if (details.frameId !== 0) return;
-  redirectState.set(details.tabId, {
-    chainLength: 0,
-    crossOriginHops: 0,
-    lastOrigin: originOf(details.url),
-    finalUrl: details.url,
+function clearRedirectChain(tabId: number): void {
+  void chrome.storage.session
+    .remove(redirectChainKey(tabId))
+    .catch(() => undefined);
+}
+
+/**
+ * The chain write races the scan on fast loads: auto-scan fires at
+ * navigation-complete while the async webNavigation write may still be in
+ * flight, and a manual scan seconds later can hit the same window. A miss
+ * here gets frozen into the result cache, turning a 200 ms race into minutes
+ * of "Redirect chain: unavailable" — so retry briefly before giving up.
+ */
+async function readRedirectChainWithGrace(
+  tabId: number,
+): Promise<RedirectChainState | null> {
+  const immediate = await readRedirectChain(tabId);
+  if (immediate) return immediate;
+  for (let attempt = 0; attempt < 2; attempt++) {
+    await new Promise((resolve) => setTimeout(resolve, 250));
+    const retry = await readRedirectChain(tabId);
+    if (retry) return retry;
+  }
+  return null;
+}
+
+/**
+ * webNavigation listeners are registered lazily once the optional permission
+ * is confirmed. Registering at module top-level is too early: without the
+ * permission the `chrome.webNavigation` namespace is undefined, so the
+ * `?.` guards skip registration forever — even after the user grants it.
+ */
+let redirectListenersRegistered = false;
+
+function registerRedirectListeners(): void {
+  if (redirectListenersRegistered) return;
+  const navigation = chrome.webNavigation;
+  if (
+    !navigation?.onBeforeNavigate ||
+    !navigation?.onCommitted ||
+    !navigation?.onHistoryStateUpdated
+  ) {
+    return;
+  }
+  redirectListenersRegistered = true;
+
+  navigation.onBeforeNavigate.addListener((details) => {
+    if (details.frameId !== 0) return;
+    // Returned (not fire-and-forget): MV3 may suspend the worker the moment a
+    // listener returns, killing an un-awaited storage write. Returning the
+    // promise keeps the worker alive until the chain is persisted.
+    return (async () => {
+      await chrome.storage.session
+        .set({
+          [redirectChainKey(details.tabId)]: {
+            chainLength: 0,
+            crossOriginHops: 0,
+            lastOrigin: originOf(details.url),
+            finalUrl: details.url,
+          } satisfies RedirectChainState,
+        })
+        .catch(() => undefined);
+    })();
   });
-});
 
-chrome.webNavigation?.onCommitted.addListener((details) => {
-  if (details.frameId !== 0) return;
-  const previous = redirectState.get(details.tabId) ?? {
+  navigation.onCommitted.addListener((details) => {
+    if (details.frameId !== 0) return;
+    return recordCommit(details.tabId, details.url);
+  });
+
+  // SPA route changes (history.pushState) never fire onCommitted — without
+  // this, single-page apps keep the chain of their initial load forever.
+  navigation.onHistoryStateUpdated.addListener((details) => {
+    if (details.frameId !== 0) return;
+    return recordCommit(details.tabId, details.url);
+  });
+}
+
+async function recordCommit(tabId: number, url: string): Promise<void> {
+  const previous = (await readRedirectChain(tabId)) ?? {
     chainLength: 0,
     crossOriginHops: 0,
     lastOrigin: null,
-    finalUrl: details.url,
+    finalUrl: url,
   };
-  const nextOrigin = originOf(details.url);
-  redirectState.set(details.tabId, {
-    chainLength: previous.chainLength + 1,
-    crossOriginHops:
-      previous.crossOriginHops +
-      (previous.lastOrigin && nextOrigin && previous.lastOrigin !== nextOrigin ? 1 : 0),
-    lastOrigin: nextOrigin,
-    finalUrl: details.url,
-  });
+  const nextOrigin = originOf(url);
+  await chrome.storage.session
+    .set({
+      [redirectChainKey(tabId)]: {
+        chainLength: previous.chainLength + 1,
+        crossOriginHops:
+          previous.crossOriginHops +
+          (previous.lastOrigin && nextOrigin && previous.lastOrigin !== nextOrigin
+            ? 1
+            : 0),
+        lastOrigin: nextOrigin,
+        finalUrl: url,
+      } satisfies RedirectChainState,
+    })
+    .catch(() => undefined);
+}
+
+function ensureRedirectTracking(): void {
+  void chrome.permissions
+    .contains({ permissions: ["webNavigation"] })
+    .then((granted) => {
+      if (granted) registerRedirectListeners();
+    })
+    .catch(() => undefined);
+}
+
+// Worker (re)starts with a clean slate: re-arm tracking if permitted, and
+// arm it the moment the user grants the permission later.
+ensureRedirectTracking();
+chrome.permissions.onAdded?.addListener((permissions) => {
+  if (permissions.permissions?.includes("webNavigation")) {
+    registerRedirectListeners();
+    // Cached verdicts predate redirect coverage — serving them would keep
+    // reporting "unavailable" until the TTL expires. Drop them so the next
+    // scan measures the now-visible redirect chain.
+    scanCache.clear();
+  }
+});
+chrome.permissions.onRemoved?.addListener((permissions) => {
+  if (permissions.permissions?.includes("webNavigation")) {
+    // Coverage shrank back: cached "checked" verdicts would overstate what a
+    // fresh scan can now see.
+    scanCache.clear();
+  }
 });
 
 chrome.tabs.onRemoved.addListener((tabId) => {
   lastAutoScan.delete(tabId);
   activeAutoScans.delete(tabId);
-  redirectState.delete(tabId);
+  clearRedirectChain(tabId);
   lastScanByTab.delete(tabId);
+  blockBypasses.delete(tabId);
 });
 
 chrome.tabs.onUpdated.addListener((tabId, changeInfo, tab) => {
@@ -723,8 +934,19 @@ async function maybeAutoScan(tabId: number, url: string): Promise<void> {
     }
 
     // Warn on any non-safe verdict from the evidence-based system.
-    const { verdict } = response.data;
-    if (
+    // Full-tab block is reserved for REALLY bad sites only: a DANGEROUS
+    // verdict with a score at/below FULL_BLOCK_SCORE_THRESHOLD (default 15).
+    // Everything else (SUSPICIOUS / HIGH_RISK / higher-score DANGEROUS) stays
+    // on the page with the in-page banner popup (Back to safety / Continue
+    // anyway) plus the side-panel warning — no forced redirection. Badges
+    // whisper and banners cannot run on dead/unresolvable domains at all, so
+    // the block page remains the only channel that always reaches the user
+    // for those worst cases.
+    const { verdict, score } = response.data;
+    if (verdict === "DANGEROUS" && score <= FULL_BLOCK_SCORE_THRESHOLD) {
+      setBadge(tabId, "!", "#dc2626");
+      await blockTabWithWarning(tabId, url, verdict);
+    } else if (
       verdict === "SUSPICIOUS" ||
       verdict === "HIGH_RISK" ||
       verdict === "DANGEROUS"
@@ -760,6 +982,57 @@ async function openSidePanelWithWarning(tabId: number): Promise<void> {
     // sidePanel.open requires a user gesture in some Chrome versions —
     // fall back to the badge as the attention signal.
     log.warn("Side panel auto-open failed", error);
+    setBadge(tabId, "!", "#ef4444");
+  }
+}
+
+/**
+ * Session-only "user chose to proceed" records. Without these, navigating
+ * back from the block page would re-trigger the block and trap the user in
+ * a loop. Memory-only on purpose: a bypass must never survive a browser
+ * restart, and a 10-minute window bounds how long a dangerous verdict can
+ * be overridden by one click.
+ */
+export const FULL_BLOCK_SCORE_THRESHOLD = 15;
+const blockBypasses = new Map<number, { url: string; at: number }>();
+const BLOCK_BYPASS_TTL_MS = 10 * 60 * 1000;
+
+function isBlockBypassed(tabId: number, url: string): boolean {
+  const bypass = blockBypasses.get(tabId);
+  return !!bypass && bypass.url === url && Date.now() - bypass.at < BLOCK_BYPASS_TTL_MS;
+}
+
+/**
+ * Full-tab takeover ONLY for the worst auto-scan verdicts (spec §8):
+ * DANGEROUS with score <= FULL_BLOCK_SCORE_THRESHOLD. Replaces the tab
+ * contents with the extension's block page. Badges whisper and banners
+ * cannot run on dead/unresolvable domains at all — this is the one channel
+ * that always reaches the user. Manual scans never block (the user is
+ * already looking at the verdict UI).
+ */
+async function blockTabWithWarning(
+  tabId: number,
+  url: string,
+  verdict: RiskVerdict,
+): Promise<void> {
+  if (isBlockBypassed(tabId, url)) return;
+  // The page may have moved on while remote lookups ran — never block a page
+  // the user has already left.
+  let currentUrl: string | undefined;
+  try {
+    currentUrl = (await chrome.tabs.get(tabId)).url;
+  } catch {
+    return;
+  }
+  if (currentUrl !== url) return;
+  try {
+    await chrome.tabs.update(tabId, {
+      url: chrome.runtime.getURL(
+        `blocked.html?url=${encodeURIComponent(url)}&verdict=${verdict}`,
+      ),
+    });
+  } catch (error) {
+    log.warn("Tab block failed", error);
     setBadge(tabId, "!", "#ef4444");
   }
 }

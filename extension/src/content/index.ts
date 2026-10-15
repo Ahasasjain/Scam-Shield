@@ -68,7 +68,12 @@ interface ContentState {
   installed: boolean;
   scanVerdict: string | null;
   warningOverlay: HTMLDivElement | null;
+  pageBanner: HTMLElement | null;
+  /** Verdict a visit-time banner was already shown for (per document). */
+  warnedVerdict: string | null;
   proceedAnyway: boolean;
+  /** Re-dispatches the user action blocked by the submit guard. */
+  pendingRetry: (() => void) | null;
 }
 
 const STATE_KEY = "__scamshieldContentState";
@@ -81,7 +86,10 @@ const state: ContentState = (host[STATE_KEY] ??= {
   installed: false,
   scanVerdict: null,
   warningOverlay: null,
+  pageBanner: null,
+  warnedVerdict: null,
   proceedAnyway: false,
+  pendingRetry: null,
 });
 
 export interface CollectedPageSignals {
@@ -245,8 +253,8 @@ export function containsSensitiveFormFields(form: HTMLFormElement): boolean {
 // Before-submit protection (§7)
 // ---------------------------------------------------------------------------
 
-// NOTE: `scanVerdict`, `warningOverlay` and `proceedAnyway` live on the
-// persisted `state` object (see ContentState above) rather than in module
+// NOTE: `scanVerdict`, `warningOverlay`, `pageBanner`, `warnedVerdict`,
+// `proceedAnyway` and `pendingRetry` live on the persisted `state` object
 // scope, so a re-injection cannot reset them mid-visit.
 
 const WARNING_STYLE_ID = "scamshield-warning-style";
@@ -255,83 +263,282 @@ function ensureStyles(): void {
   if (document.getElementById(WARNING_STYLE_ID)) return;
   const style = document.createElement("style");
   style.id = WARNING_STYLE_ID;
+  // Host pages can style `button`, `div`, or `*` aggressively, so every rule
+  // below is explicit and the containers reset inherited styles. No external
+  // assets — the shield badge is pure CSS.
   style.textContent = `
+    .scamshield-warning-overlay, .scamshield-page-banner,
+    .scamshield-warning-overlay *, .scamshield-page-banner * {
+      box-sizing: border-box;
+    }
     .scamshield-warning-overlay {
+      all: initial;
       position: fixed;
       z-index: 2147483646;
       left: 50%;
       top: 16px;
       transform: translateX(-50%);
       width: min(560px, calc(100vw - 24px));
-      background: #7f1d1d;
-      color: white;
-      border-radius: 10px;
-      box-shadow: 0 24px 80px rgba(0, 0, 0, 0.45);
-      padding: 12px 14px;
-      font-family: Arial, sans-serif;
+      background: #ffffff;
+      color: #1e293b;
+      border: 1px solid #fecaca;
+      border-top: 4px solid #dc2626;
+      border-radius: 14px;
+      box-shadow: 0 24px 80px rgba(0, 0, 0, 0.35);
+      padding: 16px;
+      font-family: -apple-system, "Segoe UI", Roboto, Arial, sans-serif;
       font-size: 14px;
-      line-height: 1.45;
+      line-height: 1.5;
+    }
+    .scamshield-warning-overlay .scamshield-row {
+      display: flex;
+      gap: 12px;
+      align-items: flex-start;
+    }
+    .scamshield-warning-overlay .scamshield-badge {
+      flex: none;
+      width: 36px;
+      height: 36px;
+      border-radius: 10px;
+      background: linear-gradient(135deg, #ef4444, #b91c1c);
+      color: #fff;
+      font-weight: 700;
+      font-size: 20px;
+      line-height: 36px;
+      text-align: center;
     }
     .scamshield-warning-overlay .scamshield-title {
       font-weight: 700;
-      font-size: 15px;
-      margin-bottom: 4px;
+      font-size: 16px;
+      color: #7f1d1d;
+      margin: 0 0 4px;
+    }
+    .scamshield-warning-overlay .scamshield-body {
+      color: #475569;
+      margin: 0;
     }
     .scamshield-warning-overlay .scamshield-reasons {
-      margin: 6px 0 10px;
+      margin: 8px 0 0;
       padding-left: 18px;
+      color: #475569;
     }
     .scamshield-warning-overlay .scamshield-actions {
       display: flex;
       gap: 8px;
+      margin-top: 12px;
     }
     .scamshield-warning-overlay button {
-      font: inherit;
-      padding: 6px 14px;
-      border-radius: 6px;
-      border: 1px solid rgba(255,255,255,0.5);
-      background: rgba(255,255,255,0.12);
-      color: #fff;
+      font-family: inherit;
+      font-size: 13px;
+      font-weight: 700;
+      padding: 8px 16px;
+      border-radius: 8px;
+      border: 1px solid #e2e8f0;
+      background: #f8fafc;
+      color: #334155;
       cursor: pointer;
     }
-    .scamshield-warning-overlay button[data-scamshield="cancel"] {
-      background: #fff;
-      color: #7f1d1d;
+    .scamshield-warning-overlay button[data-scamshield="proceed"] {
+      background: linear-gradient(to bottom, #ef4444, #b91c1c);
+      border-color: transparent;
+      color: #fff;
+    }
+    .scamshield-page-banner {
+      all: initial;
+      position: fixed;
+      z-index: 2147483646;
+      top: 0;
+      left: 0;
+      right: 0;
+      background: #fff7f7;
+      border-bottom: 2px solid #dc2626;
+      box-shadow: 0 8px 30px rgba(0, 0, 0, 0.25);
+      font-family: -apple-system, "Segoe UI", Roboto, Arial, sans-serif;
+      font-size: 14px;
+      line-height: 1.5;
+      color: #1e293b;
+    }
+    .scamshield-page-banner .scamshield-banner-inner {
+      display: flex;
+      gap: 12px;
+      align-items: center;
+      max-width: 900px;
+      margin: 0 auto;
+      padding: 12px 16px;
+    }
+    .scamshield-page-banner .scamshield-badge {
+      flex: none;
+      width: 36px;
+      height: 36px;
+      border-radius: 10px;
+      background: linear-gradient(135deg, #ef4444, #b91c1c);
+      color: #fff;
       font-weight: 700;
+      font-size: 20px;
+      line-height: 36px;
+      text-align: center;
+    }
+    .scamshield-page-banner .scamshield-title {
+      font-weight: 700;
+      font-size: 15px;
+      color: #7f1d1d;
+      margin: 0;
+    }
+    .scamshield-page-banner .scamshield-body {
+      color: #475569;
+      margin: 2px 0 0;
+      font-size: 13px;
+    }
+    .scamshield-page-banner .scamshield-banner-actions {
+      flex: none;
+      display: flex;
+      gap: 8px;
+      margin-left: auto;
+    }
+    .scamshield-page-banner button {
+      font-family: inherit;
+      font-size: 13px;
+      font-weight: 700;
+      padding: 8px 16px;
+      border-radius: 8px;
+      border: 1px solid #e2e8f0;
+      background: #fff;
+      color: #334155;
+      cursor: pointer;
+      white-space: nowrap;
+    }
+    .scamshield-page-banner button[data-scamshield="leave"] {
+      background: linear-gradient(to bottom, #ef4444, #b91c1c);
+      border-color: transparent;
+      color: #fff;
     }
   `;
-  document.head.append(style);
+  (document.head ?? document.documentElement).append(style);
 }
 
-function createOverlay(): HTMLDivElement {
+/**
+ * Visit-time banner (spec §8): shown once per document whenever a scan
+ * reports a dangerous or suspicious verdict — with or without a form on the
+ * page. Dismissal is remembered per verdict so re-injections never stack it.
+ */
+function showPageBanner(verdict: string): void {
+  destroyPageBanner();
   ensureStyles();
+
+  const copy: Record<string, { title: string; body: string }> = {
+    DANGEROUS: {
+      title: "This site looks dangerous",
+      body: "ScamShield found strong signs of phishing or malware. Leave now — do not enter any information.",
+    },
+    HIGH_RISK: {
+      title: "This site looks risky",
+      body: "ScamShield found serious risk indicators. Avoid entering passwords, payments, or personal details.",
+    },
+    SUSPICIOUS: {
+      title: "Be careful on this site",
+      body: "ScamShield found suspicious indicators. Do not submit sensitive information unless you trust it.",
+    },
+  };
+  const text = copy[verdict] ?? copy["SUSPICIOUS"]!;
+
+  const banner = document.createElement("div");
+  banner.className = "scamshield-page-banner";
+  banner.setAttribute("role", "alert");
+
+  const inner = document.createElement("div");
+  inner.className = "scamshield-banner-inner";
+
+  const badge = document.createElement("div");
+  badge.className = "scamshield-badge";
+  badge.setAttribute("aria-hidden", "true");
+  badge.textContent = "!";
+
+  const textWrap = document.createElement("div");
+  const title = document.createElement("p");
+  title.className = "scamshield-title";
+  title.textContent = text.title;
+  const body = document.createElement("p");
+  body.className = "scamshield-body";
+  body.textContent = text.body;
+  textWrap.append(title, body);
+
+  const actions = document.createElement("div");
+  actions.className = "scamshield-banner-actions";
+
+  const leave = document.createElement("button");
+  leave.type = "button";
+  leave.dataset.scamshield = "leave";
+  leave.textContent = "Back to safety";
+  leave.addEventListener("click", () => {
+    // In-page banner (unlike blocked.html) adds no history entry, so
+    // history.back() returns to the previous page — not this one. Still,
+    // never strand the user: fall back to a guaranteed-safe blank page.
+    destroyPageBanner();
+    try {
+      if (window.history.length > 1) window.history.back();
+      else globalThis.location.href = "about:blank";
+    } catch {
+      try {
+        globalThis.location.href = "about:blank";
+      } catch {
+        // Nowhere safe to go — the dismissed banner is the fallback.
+      }
+    }
+  });
+
+  const stay = document.createElement("button");
+  stay.type = "button";
+  stay.dataset.scamshield = "stay";
+  stay.textContent = "Continue anyway";
+  stay.addEventListener("click", () => {
+    destroyPageBanner();
+  });
+
+  actions.append(leave, stay);
+  inner.append(badge, textWrap, actions);
+  banner.append(inner);
+  (document.body ?? document.documentElement).append(banner);
+  state.pageBanner = banner;
+}
+
+function destroyPageBanner(): void {
+  if (state.pageBanner) {
+    state.pageBanner.remove();
+    state.pageBanner = null;
+  }
+}
+
+/**
+ * Submit-time modal (spec §7): shown ONLY when an actual submission of
+ * sensitive data is intercepted — never on verdict receipt. Explains what
+ * happened, why, and offers a real choice: Cancel keeps blocking, while
+ * "Submit anyway" re-dispatches the exact action that was stopped.
+ */
+function showSubmitModal(message: string, reasons: string[] = []): void {
+  destroySubmitModal();
+  ensureStyles();
+
   const overlay = document.createElement("div");
   overlay.className = "scamshield-warning-overlay";
   overlay.setAttribute("role", "alertdialog");
   overlay.setAttribute("aria-live", "assertive");
-  // document.body may not exist yet if injection ran during early page load.
-  // A node cached while detached would swallow every future warning, so fall
-  // back to documentElement — never leave protection invisible.
-  (document.body ?? document.documentElement).append(overlay);
-  return overlay;
-}
 
-/**
- * Explainable warning (spec §8): what happened, why it is suspicious, and
- * what the user can do — with an explicit choice so they remain in control.
- */
-function showWarning(message: string, reasons: string[] = []): void {
-  state.warningOverlay ??= createOverlay();
-  state.warningOverlay.textContent = "";
+  const row = document.createElement("div");
+  row.className = "scamshield-row";
 
+  const badge = document.createElement("div");
+  badge.className = "scamshield-badge";
+  badge.setAttribute("aria-hidden", "true");
+  badge.textContent = "!";
+
+  const textWrap = document.createElement("div");
   const title = document.createElement("div");
   title.className = "scamshield-title";
-  title.textContent = "STOP — don't submit this form";
-  state.warningOverlay.append(title);
-
-  const what = document.createElement("div");
+  title.textContent = "Do not fill this form";
+  const what = document.createElement("p");
+  what.className = "scamshield-body";
   what.textContent = message;
-  state.warningOverlay.append(what);
+  textWrap.append(title, what);
 
   if (reasons.length > 0) {
     const list = document.createElement("ul");
@@ -341,8 +548,10 @@ function showWarning(message: string, reasons: string[] = []): void {
       item.textContent = reason;
       list.append(item);
     }
-    state.warningOverlay.append(list);
+    textWrap.append(list);
   }
+
+  row.append(badge, textWrap);
 
   const actions = document.createElement("div");
   actions.className = "scamshield-actions";
@@ -352,26 +561,38 @@ function showWarning(message: string, reasons: string[] = []): void {
   cancel.dataset.scamshield = "cancel";
   cancel.textContent = "Cancel";
   cancel.addEventListener("click", () => {
+    // Keep blocking future submissions; just dismiss this one.
     state.proceedAnyway = false;
-    destroySubmissionWarning();
+    state.pendingRetry = null;
+    destroySubmitModal();
   });
 
   const proceed = document.createElement("button");
   proceed.type = "button";
   proceed.dataset.scamshield = "proceed";
-  proceed.textContent = "Proceed anyway";
+  proceed.textContent = "Submit anyway";
   proceed.addEventListener("click", () => {
-    // The user stays in control (spec §7). We record the choice and stop
-    // interfering with this page; we never silently block everything.
+    // The user stays in control (spec §7): stop interfering AND carry out
+    // the action that was stopped — otherwise "Submit anyway" is a lie that
+    // merely closes the dialog.
     state.proceedAnyway = true;
-    destroySubmissionWarning();
+    const retry = state.pendingRetry;
+    state.pendingRetry = null;
+    destroySubmitModal();
+    try {
+      retry?.();
+    } catch {
+      // The form is gone (page changed under us) — nothing left to submit.
+    }
   });
 
   actions.append(cancel, proceed);
-  state.warningOverlay.append(actions);
+  overlay.append(row, actions);
+  (document.body ?? document.documentElement).append(overlay);
+  state.warningOverlay = overlay;
 }
 
-function destroySubmissionWarning(): void {
+function destroySubmitModal(): void {
   if (state.warningOverlay) {
     state.warningOverlay.remove();
     state.warningOverlay = null;
@@ -392,9 +613,9 @@ function kindLabels(kinds: SensitiveKind[]): string {
 }
 
 function installSubmitGuard(): void {
-  const guard = (form: HTMLFormElement): boolean => {
+  const guard = (form: HTMLFormElement, retry: () => void): boolean => {
     if (!state.scanVerdict || !HIGH_RISK_VERDICTS.has(state.scanVerdict)) return false;
-    // §7: an explicit "Proceed anyway" ends our interference.
+    // §7: an explicit "Submit anyway" ends our interference.
     if (state.proceedAnyway) return false;
     const kinds = kindsIn(form).filter((kind) => HIGH_IMPACT_KINDS.has(kind));
     if (kinds.length === 0) return false;
@@ -410,8 +631,11 @@ function installSubmitGuard(): void {
       reasons.push("Card security codes are not normally collected in browser forms.");
     }
 
-    showWarning(
-      `This website is asking for ${kindLabels(kinds)} while ScamShield has flagged the page.`,
+    // Remember how to carry out the stopped action if the user chooses
+    // "Submit anyway" — without this, that button merely closes the dialog.
+    state.pendingRetry = retry;
+    showSubmitModal(
+      `This website is asking for ${kindLabels(kinds)}. Do not fill this form with passwords, OTPs, card details, or personal information unless you fully trust this site.`,
       reasons,
     );
     return true;
@@ -422,7 +646,19 @@ function installSubmitGuard(): void {
     (event) => {
       const target = event.target;
       if (!(target instanceof HTMLFormElement)) return;
-      if (!guard(target)) return;
+      const form = target;
+      const submitted = (event as SubmitEvent).submitter ?? undefined;
+      if (
+        !guard(form, () => {
+          try {
+            form.requestSubmit(submitted);
+          } catch {
+            // Detached form or unsupported submitter — nothing to retry.
+          }
+        })
+      ) {
+        return;
+      }
       event.preventDefault();
       event.stopPropagation();
     },
@@ -446,7 +682,18 @@ function installSubmitGuard(): void {
       const type = control.getAttribute("type")?.toLowerCase() ?? "submit";
       if (type !== "submit") return;
       const form = control.form;
-      if (!form || !guard(form)) return;
+      if (
+        !form ||
+        !guard(form, () => {
+          try {
+            control.click();
+          } catch {
+            // Control detached mid-flow — nothing to retry.
+          }
+        })
+      ) {
+        return;
+      }
 
       event.preventDefault();
       event.stopImmediatePropagation();
@@ -702,39 +949,51 @@ if (!state.installed) {
   // Answers signal-collection and risk-state requests over the extension
   // messaging channel.
   chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
-  if (
-    typeof message === "object" &&
-    message !== null &&
-    (message as { type?: string }).type === "COLLECT_PAGE_SIGNALS"
-  ) {
+  if (typeof message !== "object" || message === null) return false;
+  const type = (message as { type?: string }).type;
+
+  // Liveness probe: lets the background worker confirm the listener exists
+  // before delivering a verdict, instead of firing into the void.
+  if (type === "PING") {
+    try {
+      sendResponse({ ok: true });
+    } catch {
+      // Receiver gone mid-reply — the worker treats this as absent.
+    }
+    return false;
+  }
+
+  if (type === "COLLECT_PAGE_SIGNALS") {
     try {
       sendResponse({ ok: true, signals: collectSignals() });
     } catch {
       sendResponse({ ok: false, reason: "Signal collection failed" });
     }
+    return false;
   }
 
-  if (
-    typeof message === "object" &&
-    message !== null &&
-    (message as { type?: string }).type === "SET_SCAN_RISK_STATE"
-  ) {
+  if (type === "SET_SCAN_RISK_STATE") {
     const payload = message as {
       type: string;
       verdict?: string;
       showWarning?: boolean;
     };
     state.scanVerdict = payload.verdict ?? null;
-    // A new verdict resets the user's previous "proceed anyway" choice.
+    // A new verdict resets the user's previous choices.
     state.proceedAnyway = false;
+    state.pendingRetry = null;
     if (!state.scanVerdict || !HIGH_RISK_VERDICTS.has(state.scanVerdict)) {
-      destroySubmissionWarning();
+      destroySubmitModal();
+      destroyPageBanner();
+      state.warnedVerdict = null;
       return false;
     }
-    if (payload.showWarning) {
-      showWarning(
-        "ScamShield detected a suspicious or high-risk page. Do not submit passwords, payments, OTPs, or UPI details here.",
-      );
+    // Visit-time banner: fires for dangerous/suspicious verdicts whether or
+    // not the page has a form. Shown once per verdict per document — submit
+    // interceptions get their own modal, so this never doubles up.
+    if (payload.showWarning && state.warnedVerdict !== state.scanVerdict) {
+      state.warnedVerdict = state.scanVerdict;
+      showPageBanner(state.scanVerdict);
     }
     return false;
   }

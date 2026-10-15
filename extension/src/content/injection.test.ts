@@ -282,4 +282,60 @@ describe("content script injection safety (spec §31)", () => {
     deliver(harness, { type: "SET_SCAN_RISK_STATE", verdict: "DANGEROUS" });
     expect(harness.state().proceedAnyway).toBe(false);
   });
+
+  it("answers the PING liveness probe", () => {
+    const harness = createHarness();
+    inject(harness, 1);
+
+    const response = deliver(harness, { type: "PING" }) as { ok: boolean };
+    expect(response?.ok).toBe(true);
+  });
+
+  it("shows a visit-time banner for a dangerous verdict with no form on the page", () => {
+    const harness = createHarness();
+    inject(harness, 1);
+
+    deliver(harness, {
+      type: "SET_SCAN_RISK_STATE",
+      verdict: "DANGEROUS",
+      showWarning: true,
+    });
+
+    const banner = document.querySelector(".scamshield-page-banner");
+    expect(banner).not.toBeNull();
+    expect(banner?.textContent).toMatch(/looks dangerous/i);
+    // No submit modal without an actual interception.
+    expect(document.querySelector(".scamshield-warning-overlay")).toBeNull();
+  });
+
+  it("does not stack duplicate banners for the same verdict", () => {
+    const harness = createHarness();
+    inject(harness, 1);
+
+    const message = {
+      type: "SET_SCAN_RISK_STATE",
+      verdict: "HIGH_RISK",
+      showWarning: true,
+    };
+    deliver(harness, message);
+    inject(harness, 1);
+    deliver(harness, message);
+
+    expect(document.querySelectorAll(".scamshield-page-banner")).toHaveLength(1);
+  });
+
+  it("shows no banner for a safe verdict and removes a stale one", () => {
+    const harness = createHarness();
+    inject(harness, 1);
+
+    deliver(harness, {
+      type: "SET_SCAN_RISK_STATE",
+      verdict: "DANGEROUS",
+      showWarning: true,
+    });
+    expect(document.querySelector(".scamshield-page-banner")).not.toBeNull();
+
+    deliver(harness, { type: "SET_SCAN_RISK_STATE", verdict: "SAFE" });
+    expect(document.querySelector(".scamshield-page-banner")).toBeNull();
+  });
 });

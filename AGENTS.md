@@ -151,7 +151,10 @@ Popup and side panel are the same `App.tsx` with a `variant` prop. Both call
 
 1. read tab URL, reject `chrome://` etc. (`utils/validation.ts`, `utils/url.ts`)
 2. inject `content.js` on demand → page signals; `webNavigation` redirect signals only if
-   the optional permission was granted (otherwise honestly `null`)
+   the optional permission was granted (otherwise honestly `null`). Chains persist in
+   `chrome.storage.session` (survives worker restarts); listeners register lazily on
+   grant via `permissions.onAdded`. Users grant it from Settings → Redirect-chain
+   tracking — auto-scan being on does NOT imply the permission was ever requested.
 3. RDAP domain-age lookup (`scanner/reputationAnalyzer.ts` → `rdap.org`, 3s timeout)
 4. threat intel (`scanner/threatIntelligenceAnalyzer.ts`): composite — backend
    `/api/threat-lookup` first, then a bundled `LOCAL_FEED` of 12 lookalike domains
@@ -163,9 +166,18 @@ Popup and side panel are the same `App.tsx` with a `variant` prop. Both call
    and `deriveVerdict()`
 8. re-check the tab URL, notify the content script, append history
 
-The content script (`content/index.ts`) does more than collect signals: on
-SUSPICIOUS/HIGH_RISK/DANGEROUS verdicts it **blocks** submit and submit-button clicks on
-forms containing password/card/OTP/UPI fields and shows an overlay. Surprising when testing.
+Auto-scan DANGEROUS verdicts take over the tab with `blocked.html`
+(`blockTabWithWarning`, session bypass via `BYPASS_BLOCK`, 10-min TTL);
+SUSPICIOUS/HIGH_RISK keep the side-panel warning. Manual scans never block.
+
+The content script (`content/index.ts`) has two separate warnings: a visit-time top
+banner (`showPageBanner`, fired once per verdict per document on
+`SET_SCAN_RISK_STATE` — form or no form) with Leave-this-site / Continue-carefully,
+and a submit-time modal (`showSubmitModal`, only on actual interception) with
+Cancel / Submit-anyway. "Submit anyway" re-dispatches the stopped action via a
+stored retry closure — it never merely closes the dialog. The background probes
+`PING` and injects on demand (`ensureContentScript`) before delivering a verdict,
+so cached scans that skipped injection still warn. Surprising when testing.
 
 ## Invariants that must not be broken
 

@@ -200,6 +200,7 @@ export function deriveLimitations(
   coverage: DetectionCoverageV2,
   aiAvailable: boolean,
   threat: Pick<ThreatIntelMatch, "available" | "reason"> | undefined,
+  redirectPermissionGranted = false,
 ): string[] {
   const limitations: string[] = [];
 
@@ -231,8 +232,14 @@ export function deriveLimitations(
     );
   }
   if (!coverage.redirects) {
+    // Two distinct honest states share one coverage bit: never granted (fix
+    // is the permission) vs granted but nothing recorded for this page load
+    // (fix is a reload + rescan). Conflating them sends granted users on a
+    // futile trip to Settings.
     limitations.push(
-      "The redirect chain was not analysed. Grant the optional webNavigation permission to enable it.",
+      redirectPermissionGranted
+        ? "No redirect chain data was recorded for this page load — reload the page and scan again."
+        : "The redirect chain was not analysed. Grant the optional webNavigation permission in Settings to enable it.",
     );
   }
   if (!coverage.reputation) {

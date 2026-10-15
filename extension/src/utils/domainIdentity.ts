@@ -144,6 +144,246 @@ export const BRANDS: readonly BrandDefinition[] = [
     names: ["axisbank"],
     officialDomains: ["axisbank.com"],
   },
+  {
+    id: "x",
+    names: ["twitter", "twiter"],
+    officialDomains: ["x.com", "twitter.com"],
+  },
+  {
+    id: "yahoo",
+    names: ["yahoo", "yaho"],
+    officialDomains: ["yahoo.com"],
+  },
+  {
+    id: "tiktok",
+    names: ["tiktok", "tiktock"],
+    officialDomains: ["tiktok.com"],
+  },
+  {
+    id: "snapchat",
+    names: ["snapchat", "snapchatt"],
+    officialDomains: ["snapchat.com"],
+  },
+  {
+    id: "pinterest",
+    names: ["pinterest", "pintrest"],
+    officialDomains: ["pinterest.com"],
+  },
+  {
+    id: "reddit",
+    names: ["reddit", "reditt"],
+    officialDomains: ["reddit.com"],
+  },
+  {
+    id: "discord",
+    names: ["discord", "disscord"],
+    officialDomains: ["discord.com"],
+  },
+  {
+    id: "telegram",
+    names: ["telegram", "telegrm"],
+    officialDomains: ["telegram.org", "t.me"],
+  },
+  {
+    id: "adobe",
+    names: ["adobe", "adob"],
+    officialDomains: ["adobe.com"],
+  },
+  {
+    id: "dropbox",
+    names: ["dropbox", "dropbx"],
+    officialDomains: ["dropbox.com"],
+  },
+  {
+    id: "github",
+    names: ["github", "githib"],
+    officialDomains: ["github.com"],
+  },
+  {
+    id: "zoom",
+    names: ["zoom"],
+    officialDomains: ["zoom.us"],
+  },
+  {
+    id: "slack",
+    names: ["slack"],
+    officialDomains: ["slack.com"],
+  },
+  {
+    id: "samsung",
+    names: ["samsung", "samsng"],
+    officialDomains: ["samsung.com"],
+  },
+  {
+    id: "ebay",
+    names: ["ebay"],
+    officialDomains: ["ebay.com"],
+  },
+  {
+    id: "walmart",
+    names: ["walmart", "wallmart"],
+    officialDomains: ["walmart.com"],
+  },
+  {
+    id: "alibaba",
+    names: ["alibaba", "aliexpress"],
+    officialDomains: ["alibaba.com", "aliexpress.com"],
+  },
+  {
+    id: "flipkart",
+    names: ["flipkart", "flipkrt"],
+    officialDomains: ["flipkart.com"],
+  },
+  {
+    id: "phonepe",
+    names: ["phonepe", "phonepay"],
+    officialDomains: ["phonepe.com"],
+  },
+  {
+    id: "paytm",
+    names: ["paytm", "paytmm"],
+    officialDomains: ["paytm.com"],
+  },
+  {
+    id: "bankofamerica",
+    names: ["bankofamerica", "bankamerica"],
+    officialDomains: ["bankofamerica.com"],
+  },
+  {
+    id: "citi",
+    names: ["citi", "citibank"],
+    officialDomains: ["citi.com", "citibank.com"],
+  },
+  {
+    id: "capitalone",
+    names: ["capitalone", "capitolone"],
+    officialDomains: ["capitalone.com"],
+  },
+  {
+    id: "americanexpress",
+    names: ["americanexpress", "amex"],
+    officialDomains: ["americanexpress.com"],
+  },
+  {
+    id: "venmo",
+    names: ["venmo"],
+    officialDomains: ["venmo.com"],
+  },
+  {
+    id: "cashapp",
+    names: ["cashapp"],
+    officialDomains: ["cash.app"],
+  },
+  {
+    id: "zelle",
+    names: ["zelle", "zellepay"],
+    officialDomains: ["zellepay.com"],
+  },
+  {
+    id: "kraken",
+    names: ["kraken"],
+    officialDomains: ["kraken.com"],
+  },
+  {
+    id: "metamask",
+    names: ["metamask", "metemask"],
+    officialDomains: ["metamask.io"],
+  },
+  {
+    id: "ledger",
+    names: ["ledger"],
+    officialDomains: ["ledger.com"],
+  },
+  {
+    id: "disney",
+    names: ["disney", "disny"],
+    officialDomains: ["disney.com", "disneyplus.com"],
+  },
+  {
+    id: "hbo",
+    names: ["hbo", "hbomax", "max"],
+    officialDomains: ["max.com", "hbo.com"],
+  },
+  {
+    id: "spotify",
+    names: ["spotify", "spotfy"],
+    officialDomains: ["spotify.com"],
+  },
+  {
+    id: "twitch",
+    names: ["twitch", "twich"],
+    officialDomains: ["twitch.tv"],
+  },
+  {
+    id: "roblox",
+    names: ["roblox", "roblok"],
+    officialDomains: ["roblox.com"],
+  },
+  {
+    id: "epicgames",
+    names: ["epicgames", "epic"],
+    officialDomains: ["epicgames.com"],
+  },
+  {
+    id: "playstation",
+    names: ["playstation", "playstaion"],
+    officialDomains: ["playstation.com"],
+  },
+  {
+    id: "xbox",
+    names: ["xbox"],
+    officialDomains: ["xbox.com"],
+  },
+  {
+    id: "minecraft",
+    names: ["minecraft", "minecarft"],
+    officialDomains: ["minecraft.net", "mojang.com"],
+  },
+  {
+    id: "nintendo",
+    names: ["nintendo", "nintento"],
+    officialDomains: ["nintendo.com"],
+  },
+  {
+    id: "fedex",
+    names: ["fedex", "fedx"],
+    officialDomains: ["fedex.com"],
+  },
+  {
+    id: "ups",
+    names: ["ups"],
+    officialDomains: ["ups.com"],
+  },
+  {
+    id: "usps",
+    names: ["usps"],
+    officialDomains: ["usps.com"],
+  },
+  {
+    id: "dhl",
+    names: ["dhl"],
+    officialDomains: ["dhl.com"],
+  },
+  {
+    id: "irs",
+    names: ["irs"],
+    officialDomains: ["irs.gov"],
+  },
+  {
+    id: "incometaxindia",
+    names: ["incometax"],
+    officialDomains: ["incometax.gov.in"],
+  },
+  {
+    id: "proton",
+    names: ["proton", "protonmail"],
+    officialDomains: ["proton.me", "protonmail.com"],
+  },
+  {
+    id: "onlyfans",
+    names: ["onlyfans", "onlyfan"],
+    officialDomains: ["onlyfans.com"],
+  },
 ];
 
 // ---------------------------------------------------------------------------

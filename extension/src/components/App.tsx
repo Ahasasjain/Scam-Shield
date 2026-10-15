@@ -373,7 +373,7 @@ export function App({
                 type="button"
                 onClick={() => void runScan()}
                 disabled={scanning || !currentUrl}
-                className="mt-3 inline-flex min-h-[44px] w-full items-center justify-center gap-2 rounded-xl bg-gradient-to-b from-emerald-500 to-emerald-700 px-5 text-sm font-bold text-white shadow-md shadow-emerald-600/25 transition-all duration-150 hover:from-emerald-600 hover:to-emerald-700 hover:cursor-pointer active:scale-[0.99] disabled:cursor-not-allowed disabled:opacity-50 disabled:active:scale-100"
+                className="mt-2.5 inline-flex min-h-[38px] w-full items-center justify-center gap-2 rounded-xl bg-gradient-to-b from-emerald-500 to-emerald-700 px-4 text-[13px] font-bold text-white shadow-sm shadow-emerald-600/25 transition-all duration-150 hover:from-emerald-600 hover:to-emerald-700 hover:shadow-md active:scale-[0.99] disabled:cursor-not-allowed disabled:opacity-50 disabled:active:scale-100"
               >
                 {scanning ? (
                   <>
@@ -386,8 +386,8 @@ export function App({
                 ) : (
                   <>
                     <svg
-                      width="16"
-                      height="16"
+                      width="14"
+                      height="14"
                       viewBox="0 0 24 24"
                       fill="none"
                       stroke="currentColor"
