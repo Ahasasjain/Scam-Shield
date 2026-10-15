@@ -12,6 +12,13 @@ Copy-paste source for the store listing. Image assets live in `Promo_Images/`
 | `screenshot-1-scan-1280x800.png` | 1280×800 | Screenshot 1 — scan verdict |
 | `screenshot-2-history-1280x800.png` | 1280×800 | Screenshot 2 — security timeline |
 | `screenshot-3-privacy-1280x800.png` | 1280×800 | Screenshot 3 — privacy explainer |
+| `screenshot-ai-analysis-summary.png` | popup crop | AI analysis summary (confidence + rationale) |
+| `screenshot-ai-indicators.png` | popup crop | AI finding cards (HTTP login, urgency, fake warnings) |
+| `screenshot-rule-evidence.png` | popup crop | Rule evidence (unknown scripts, credential pressure) |
+| `screenshot-critical-rule-findings.png` | popup crop | Critical rules (fake warning, OTP, fake KYC) |
+| `screenshot-risk-factor-cards.png` | popup crop | Risk factors (password/urgency/giveaway rules) |
+| `screenshot-form-submit-warning.png` | page crop | "Do not fill this form" submit interstitial |
+| `screenshot-block-page.png` | page crop | Full-tab block page (worst cases only) |
 | `promo-small-440x280.png` | 440×280 | Small promo tile (**required**) |
 | `promo-large-920x680.png` | 920×680 | Large promo tile (recommended) |
 | `promo-marquee-1400x560.png` | 1400×560 | Marquee banner (optional) |
