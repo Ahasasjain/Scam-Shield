@@ -1,0 +1,29 @@
+# Build context for server/Dockerfile (run from the repo root).
+#
+# The image only needs: package.json, pnpm-lock.yaml, pnpm-workspace.yaml,
+# shared/ and server/. Everything below is either rebuilt inside the image or
+# irrelevant to the backend — keeping it out shrinks the context that GitHub
+# Actions uploads on every build.
+
+.git
+.github
+**/node_modules
+**/dist
+**/coverage
+**/*.tsbuildinfo
+
+# Never let a developer's local secrets into the build context.
+**/.env
+**/.env.*
+!**/.env.example
+
+# Not needed by the server image.
+extension
+docs
+Promo_Images
+deploy
+*.md
+*.zip
+Caddyfile
+docker-compose.yml
+render.yaml

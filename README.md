@@ -111,7 +111,7 @@ pnpm build          # builds extension/ and server/
 ### Run the AI backend (recommended)
 
 ```bash
-cp .env.example server/.env
+cp server/.env.example server/.env
 # Edit server/.env — set GROQ_API_KEY=gsk_... (never commit it!)
 # For real threat coverage also set GOOGLE_SAFEBROWSING_API_KEY=...
 
@@ -187,23 +187,39 @@ Tests cover: every URL heuristic (safe + malicious fixtures), score bands, rule-
 
 ## Production build & deployment
 
+GitHub Actions does the work (see [docs/DEPLOYMENT.md](docs/DEPLOYMENT.md)):
+
+- On pull requests: lint, typecheck, tests, and a `docker build` smoke test.
+- On pushes to `main` that touch `server/`/`shared/`: verify → build & push the
+  backend Docker image to GHCR → deploy to Render (free tier) and/or over SSH to
+  an AWS EC2/VPS host, whichever is configured. Both targets are opt-in via
+  secrets; nothing ships while CI is red.
+- On `v*` tags: build the extension with the backend URL baked in, zip it,
+  attach it to a GitHub release, and optionally publish to the Chrome Web Store.
+
+### Backend (Docker)
+
+```bash
+cp server/.env.example server/.env   # fill in the keys
+docker compose up -d --build         # API on :8787
+# domain + automatic HTTPS:
+#   echo "DOMAIN=api.example.com" >> .env && docker compose --profile edge up -d
+```
+
+The image is built from `server/Dockerfile` (multi-stage, non-root,
+healthcheck). Any Node 20+ host also works without Docker:
+`cd server && pnpm install && pnpm build && pnpm start` (honors `PORT`).
+
+Set `NODE_ENV=production`, `GROQ_API_KEY`, `GROQ_MODEL=openai/gpt-oss-120b`, and
+`ALLOWED_EXTENSION_ORIGINS=chrome-extension://<your-extension-id>` in production.
+
 ### Extension
 
 ```bash
-pnpm --filter @scamshield/extension build   # outputs extension/dist
-cd extension && zip -r scamshield.zip dist  # upload to Chrome Web Store
+SCAMSHIELD_API_URL="https://your-backend.example" \
+  pnpm --filter @scamshield/extension build   # outputs extension/dist
+cd extension/dist && zip -r ../scamshield.zip .  # manifest.json at zip root
 ```
-
-### Backend
-
-Any Node 20+ host works (Render, Railway, Fly.io, Docker, VPS):
-
-```bash
-cd server
-pnpm install && pnpm build && pnpm start    # honors PORT env
-```
-
-Set `NODE_ENV=production`, `GROQ_API_KEY`, `GROQ_MODEL=openai/gpt-oss-120b`, and `ALLOWED_EXTENSION_ORIGINS=chrome-extension://<your-extension-id>` in production.
 
 ## Chrome Web Store checklist
 

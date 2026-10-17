@@ -1,0 +1,159 @@
+name: Deploy server
+
+# Runs on every push to main that can affect the backend image, plus manual
+# runs. verify → GHCR image → deploy. Both deploy targets are opt-in: a target
+# whose secrets are absent prints a notice and skips, so you can start with
+# Render and add AWS later without touching this file.
+on:
+  push:
+    branches: [main]
+    paths:
+      - "server/**"
+      - "shared/**"
+      - "package.json"
+      - "pnpm-lock.yaml"
+      - "pnpm-workspace.yaml"
+      - ".dockerignore"
+      - "docker-compose.yml"
+      - ".github/workflows/deploy-server.yml"
+  workflow_dispatch:
+
+concurrency:
+  group: deploy-server
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+jobs:
+  verify:
+    name: Verify (lint, typecheck, tests)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: pnpm/action-setup@v6
+      - uses: actions/setup-node@v7
+        with:
+          node-version: "20"
+          cache: pnpm
+      - name: Install
+        run: pnpm install --frozen-lockfile
+      # Build first: the extension's injection test evaluates the real built
+      # dist/content.js and fails loudly when it is missing.
+      - name: Build all packages
+        run: pnpm -r build
+        env:
+          SCAMSHIELD_API_URL: https://ci.invalid
+      - name: Lint
+        run: pnpm -r lint
+      - name: Typecheck
+        run: pnpm -r typecheck
+      - name: Test
+        run: pnpm -r test
+
+  image:
+    name: Build & push image (GHCR)
+    needs: verify
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+    outputs:
+      ref: ${{ steps.tag.outputs.image }}
+    steps:
+      - uses: actions/checkout@v7
+      - name: Compute lowercase image name
+        id: tag
+        # GHCR rejects uppercase paths; github.repository keeps the owner's case.
+        run: echo "image=ghcr.io/${GITHUB_REPOSITORY,,}/scamshield-api" >> "$GITHUB_OUTPUT"
+      - uses: docker/setup-buildx-action@v4
+      - uses: docker/login-action@v4
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+      - uses: docker/metadata-action@v6
+        id: meta
+        with:
+          images: ${{ steps.tag.outputs.image }}
+          tags: |
+            type=raw,value=latest
+            type=sha,prefix=sha-
+      - uses: docker/build-push-action@v7
+        with:
+          context: .
+          file: server/Dockerfile
+          push: true
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+      - name: Summary
+        run: echo 'Pushed ${{ steps.tag.outputs.image }}:latest' >> "$GITHUB_STEP_SUMMARY"
+
+  deploy-render:
+    name: Trigger Render deploy
+    needs: verify
+    if: github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    env:
+      # Secrets cannot be referenced in `if:` directly — expose as env, test that.
+      RENDER_DEPLOY_HOOK: ${{ secrets.RENDER_DEPLOY_HOOK }}
+    steps:
+      - name: Trigger deploy hook
+        if: env.RENDER_DEPLOY_HOOK != ''
+        run: |
+          curl -fsS -X POST "$RENDER_DEPLOY_HOOK" > /dev/null
+          echo "Render deploy triggered."
+      - name: Not configured (skip)
+        if: env.RENDER_DEPLOY_HOOK == ''
+        run: echo "::notice::RENDER_DEPLOY_HOOK is not set — skipping Render. See docs/DEPLOYMENT.md (Option A)."
+
+  deploy-aws:
+    name: Deploy to EC2 (SSH + docker compose)
+    needs: image
+    if: github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    env:
+      EC2_HOST: ${{ secrets.EC2_HOST }}
+      EC2_USER: ${{ secrets.EC2_USER }}
+      EC2_SSH_KEY: ${{ secrets.EC2_SSH_KEY }}
+      GHCR_USER: ${{ secrets.GHCR_USER }}
+      GHCR_TOKEN: ${{ secrets.GHCR_TOKEN }}
+      APP_DIR: ${{ vars.EC2_APP_DIR }}
+      IMAGE: ${{ needs.image.outputs.ref }}
+    steps:
+      - name: Not configured (skip)
+        if: env.EC2_HOST == '' || env.EC2_USER == '' || env.EC2_SSH_KEY == ''
+        run: echo "::notice::EC2_HOST / EC2_USER / EC2_SSH_KEY are not set — skipping AWS deploy. See docs/DEPLOYMENT.md (Option B)."
+      - name: Pull image & restart api
+        if: env.EC2_HOST != '' && env.EC2_USER != '' && env.EC2_SSH_KEY != ''
+        uses: appleboy/ssh-action@v1.2.5
+        with:
+          host: ${{ secrets.EC2_HOST }}
+          username: ${{ secrets.EC2_USER }}
+          key: ${{ secrets.EC2_SSH_KEY }}
+          envs: IMAGE,GHCR_USER,GHCR_TOKEN,APP_DIR
+          script_stop: true
+          script: |
+            set -eu
+            APP_DIR="${APP_DIR:-$HOME/scamshield}"
+            cd "$APP_DIR"
+            # Public GHCR packages pull anonymously; a token is only needed
+            # when the package (repo) is private.
+            if [ -n "${GHCR_TOKEN:-}" ]; then
+              echo "$GHCR_TOKEN" | docker login ghcr.io -u "${GHCR_USER:-github}" --password-stdin
+            fi
+            SCAMSHIELD_API_IMAGE="$IMAGE:latest" docker compose pull api
+            SCAMSHIELD_API_IMAGE="$IMAGE:latest" docker compose up -d --remove-orphans api
+            docker image prune -f > /dev/null
+            # The container needs a moment; poll instead of a single hopeful curl.
+            for attempt in $(seq 1 10); do
+              if curl -fsS http://127.0.0.1:8787/api/health > /dev/null; then
+                echo "api is healthy (attempt $attempt)"
+                exit 0
+              fi
+              sleep 3
+            done
+            echo "api did not become healthy in time — check: docker compose logs api"
+            exit 1

@@ -1,0 +1,57 @@
+name: CI
+
+# Pull requests only. Pushes to main run the same verification inside
+# deploy-server.yml, immediately before the image build — so a red build can
+# never be deployed. Manual runs are available from the Actions tab.
+on:
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  verify:
+    name: Lint, typecheck, tests, builds
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: pnpm/action-setup@v6 # version comes from package.json#packageManager
+      - uses: actions/setup-node@v7
+        with:
+          node-version: "20"
+          cache: pnpm
+      - name: Install
+        run: pnpm install --frozen-lockfile
+      # Build first: extension/src/content/injection.test.ts evaluates the real
+      # built dist/content.js and fails loudly when it is missing.
+      - name: Build all packages
+        run: pnpm -r build
+        env:
+          SCAMSHIELD_API_URL: https://ci.invalid
+      - name: Lint
+        run: pnpm -r lint
+      - name: Typecheck
+        run: pnpm -r typecheck
+      - name: Test
+        run: pnpm -r test
+
+  docker:
+    name: Docker image builds
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: docker/setup-buildx-action@v4
+      # Build-only smoke test of server/Dockerfile — nothing is pushed here.
+      - uses: docker/build-push-action@v7
+        with:
+          context: .
+          file: server/Dockerfile
+          push: false
+          cache-from: type=gha
+          cache-to: type=gha,mode=max

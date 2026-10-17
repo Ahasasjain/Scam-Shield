@@ -1,0 +1,287 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>ScamShield — Block Page</title>
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+    background: radial-gradient(circle at 50% 50%, rgba(239, 68, 68, 0.18) 0%, transparent 50%),
+                linear-gradient(135deg, #0f172a 0%, #020617 100%);
+    color: #f8fafc;
+    min-height: 100vh;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 40px;
+  }
+  .scene {
+    display: flex;
+    gap: 48px;
+    align-items: center;
+    max-width: 1280px;
+  }
+  .copy {
+    flex: 1;
+    max-width: 560px;
+  }
+  .badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    background: rgba(239, 68, 68, 0.14);
+    border: 1px solid rgba(239, 68, 68, 0.35);
+    color: #fca5a5;
+    font-size: 13px;
+    font-weight: 600;
+    padding: 7px 16px;
+    border-radius: 999px;
+    margin-bottom: 24px;
+    letter-spacing: 0.02em;
+    text-transform: uppercase;
+  }
+  h1 {
+    font-size: 52px;
+    line-height: 1.12;
+    font-weight: 800;
+    margin-bottom: 16px;
+    letter-spacing: -0.02em;
+    background: linear-gradient(to right, #ffffff, #cbd5e1);
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+  }
+  p.sub {
+    font-size: 19px;
+    line-height: 1.55;
+    color: #94a3b8;
+    margin-bottom: 32px;
+  }
+  .feature {
+    display: flex;
+    align-items: flex-start;
+    gap: 14px;
+    margin-bottom: 18px;
+  }
+  .feature .dot {
+    flex-shrink: 0;
+    width: 10px;
+    height: 10px;
+    background: #ef4444;
+    border-radius: 50%;
+    margin-top: 6px;
+    box-shadow: 0 0 0 4px rgba(239, 68, 68, 0.15);
+  }
+  .feature p {
+    font-size: 15px;
+    color: #cbd5e1;
+    line-height: 1.5;
+  }
+  .phone {
+    flex-shrink: 0;
+    width: 430px;
+    height: 760px;
+    background: #020617;
+    border-radius: 44px;
+    border: 1px solid rgba(255,255,255,0.06);
+    box-shadow: 0 40px 120px rgba(0,0,0,0.55), inset 0 1px 0 rgba(255,255,255,0.04);
+    overflow: hidden;
+    position: relative;
+  }
+  .phone-header {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding: 22px 24px;
+    background: #0f172a;
+    border-bottom: 1px solid rgba(255,255,255,0.04);
+  }
+  .shield {
+    width: 40px;
+    height: 40px;
+    background: #ef4444;
+    border-radius: 12px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    box-shadow: 0 8px 24px rgba(239, 68, 68, 0.4);
+  }
+  .shield svg { width: 20px; height: 20px; fill: #ffffff; }
+  .phone-title {
+    font-size: 18px;
+    font-weight: 700;
+    letter-spacing: -0.01em;
+  }
+  .phone-sub {
+    font-size: 12px;
+    color: #94a3b8;
+    margin-top: 2px;
+  }
+  .tabs {
+    display: flex;
+    gap: 6px;
+    padding: 18px 24px;
+  }
+  .tab {
+    flex: 1;
+    padding: 10px 14px;
+    border-radius: 10px;
+    background: rgba(30, 41, 59, 0.4);
+    border: 1px solid rgba(255,255,255,0.03);
+    color: #94a3b8;
+    font-size: 14px;
+    font-weight: 600;
+    text-align: center;
+  }
+  .tab.active {
+    background: rgba(239, 68, 68, 0.12);
+    color: #fca5a5;
+    border-color: rgba(239, 68, 68, 0.35);
+  }
+  .content {
+    padding: 32px 24px;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    text-align: center;
+    gap: 16px;
+  }
+  .block-icon {
+    width: 64px;
+    height: 64px;
+    border-radius: 20px;
+    background: linear-gradient(135deg, #ef4444, #b91c1c);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    box-shadow: 0 16px 40px rgba(239, 68, 68, 0.5);
+  }
+  .block-icon svg { width: 32px; height: 32px; fill: #ffffff; }
+  .block-title {
+    font-size: 13px;
+    font-weight: 800;
+    color: #fca5a5;
+    text-transform: uppercase;
+    letter-spacing: 0.1em;
+    margin-bottom: 10px;
+  }
+  .block-verdict {
+    font-size: 26px;
+    font-weight: 800;
+    color: #ffffff;
+    margin-bottom: 6px;
+    letter-spacing: -0.01em;
+  }
+  .block-host {
+    font-size: 14px;
+    font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+    color: #94a3b8;
+    margin-bottom: 18px;
+    background: rgba(255,255,255,0.03);
+    padding: 6px 14px;
+    border-radius: 8px;
+  }
+  .block-desc {
+    font-size: 15px;
+    color: #94a3b8;
+    line-height: 1.6;
+    max-width: 300px;
+    margin-bottom: 28px;
+  }
+  .btn-row {
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+    width: 100%;
+    max-width: 300px;
+  }
+  .btn-back {
+    width: 100%;
+    background: #ef4444;
+    border: none;
+    border-radius: 14px;
+    color: #ffffff;
+    font-size: 15px;
+    font-weight: 700;
+    padding: 14px;
+    cursor: pointer;
+    box-shadow: 0 10px 30px rgba(239, 68, 68, 0.4);
+    transition: transform 0.1s, filter 0.1s;
+  }
+  .btn-back:hover { filter: brightness(1.1); transform: translateY(-1px); }
+  .btn-continue {
+    width: 100%;
+    background: rgba(255,255,255,0.05);
+    border: 1px solid rgba(255,255,255,0.15);
+    border-radius: 14px;
+    color: #cbd5e1;
+    font-size: 15px;
+    font-weight: 600;
+    padding: 12px;
+    cursor: pointer;
+    transition: all 0.2s;
+  }
+  .btn-continue:hover { background: rgba(255,255,255,0.1); color: #ffffff; }
+  .footer-note {
+    font-size: 11px;
+    color: #64748b;
+    margin-top: 28px;
+    text-align: center;
+    padding: 0 24px;
+    line-height: 1.4;
+  }
+</style>
+</head>
+<body>
+  <div class="scene">
+    <div class="copy">
+      <div class="badge">Full-Tab Block</div>
+      <h1>Only the worst sites take<br>over your tab.</h1>
+      <p class="sub">A full block page appears only for DANGEROUS verdicts with a score of 15 or below — everything else gets a banner popup on the page itself.</p>
+      <div class="feature">
+        <div class="dot"></div>
+        <p>Reserved for confirmed threat matches or overwhelming evidence.</p>
+      </div>
+      <div class="feature">
+        <div class="dot"></div>
+        <p>“Back to safety” opens a new tab — never returns you to the dangerous site.</p>
+      </div>
+      <div class="feature">
+        <div class="dot"></div>
+        <p>“Continue anyway” records a 10-minute session bypass.</p>
+      </div>
+    </div>
+    <div class="phone">
+      <div class="phone-header">
+        <div class="shield">
+          <svg viewBox="0 0 24 24"><path d="M12 2L2 7l10 5 10-5-10-5zM2 17l10 5 10-5M2 12l10 5 10-5"/></svg>
+        </div>
+        <div>
+          <div class="phone-title">ScamShield</div>
+          <div class="phone-sub">PHISHING PROTECTION</div>
+        </div>
+      </div>
+      <div class="tabs">
+        <div class="tab">Scan</div>
+        <div class="tab active">History</div>
+        <div class="tab">Settings</div>
+      </div>
+      <div class="content">
+        <div class="block-icon">
+          <svg viewBox="0 0 24 24"><path d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.859-3.007M12 9V7m0 5v2m0 5v2m0-5v-5m-7 16h.01"/></svg>
+        </div>
+        <div class="block-title">ScamShield blocked this site</div>
+        <div class="block-verdict">Likely dangerous website</div>
+        <div class="block-host">g00gle.com</div>
+        <div class="block-desc">Multiple strong indicators of phishing or malware were found. Do not enter passwords, card details, OTPs, or personal information — leave this website.</div>
+        <div class="btn-row">
+          <button class="btn-back">Go back to safety</button>
+          <button class="btn-continue">Continue anyway</button>
+        </div>
+      </div>
+      <div class="footer-note">ScamShield provides probabilistic risk indicators, not guarantees.</div>
+    </div>
+  </div>
+</body>
+</html>

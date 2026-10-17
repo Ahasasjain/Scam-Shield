@@ -58,7 +58,9 @@ export function getFeedStatus(): {
 }
 
 export async function refreshFeed(feedUrl?: string): Promise<boolean> {
-  const url = feedUrl ?? process.env["THREAT_FEED_URL"] ?? DEFAULT_FEED_URL;
+  // `||` (not `??`): the tracked server/.env.example ships THREAT_FEED_URL
+  // empty, and "empty" must mean "use the default feed", not "fetch `""`".
+  const url = feedUrl || process.env["THREAT_FEED_URL"] || DEFAULT_FEED_URL;
   const controller = new AbortController();
   const timer = setTimeout(() => {
     controller.abort();

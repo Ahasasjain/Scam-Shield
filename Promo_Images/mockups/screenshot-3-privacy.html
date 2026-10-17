@@ -1,0 +1,380 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>ScamShield — Privacy Screenshot</title>
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+    background: radial-gradient(circle at 15% 20%, rgba(16, 185, 129, 0.12) 0%, transparent 40%),
+                radial-gradient(circle at 85% 80%, rgba(56, 189, 248, 0.08) 0%, transparent 40%),
+                linear-gradient(135deg, #0f172a 0%, #020617 100%);
+    color: #f8fafc;
+    min-height: 100vh;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 40px;
+  }
+  .scene {
+    display: flex;
+    gap: 48px;
+    align-items: center;
+    max-width: 1280px;
+  }
+  .copy {
+    flex: 1;
+    max-width: 560px;
+  }
+  .badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    background: rgba(16, 185, 129, 0.14);
+    border: 1px solid rgba(16, 185, 129, 0.35);
+    color: #6ee7b7;
+    font-size: 13px;
+    font-weight: 600;
+    padding: 7px 16px;
+    border-radius: 999px;
+    margin-bottom: 24px;
+    letter-spacing: 0.02em;
+    text-transform: uppercase;
+  }
+  h1 {
+    font-size: 52px;
+    line-height: 1.12;
+    font-weight: 800;
+    margin-bottom: 16px;
+    letter-spacing: -0.02em;
+    background: linear-gradient(to right, #ffffff, #cbd5e1);
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+  }
+  p.sub {
+    font-size: 19px;
+    line-height: 1.55;
+    color: #94a3b8;
+    margin-bottom: 32px;
+  }
+  .feature {
+    display: flex;
+    align-items: flex-start;
+    gap: 14px;
+    margin-bottom: 18px;
+  }
+  .feature .dot {
+    flex-shrink: 0;
+    width: 10px;
+    height: 10px;
+    background: #10b981;
+    border-radius: 50%;
+    margin-top: 6px;
+    box-shadow: 0 0 0 4px rgba(16, 185, 129, 0.15);
+  }
+  .feature p {
+    font-size: 15px;
+    color: #cbd5e1;
+    line-height: 1.5;
+  }
+  .phone {
+    flex-shrink: 0;
+    width: 430px;
+    height: 760px;
+    background: #020617;
+    border-radius: 44px;
+    border: 1px solid rgba(255,255,255,0.06);
+    box-shadow: 0 40px 120px rgba(0,0,0,0.55), inset 0 1px 0 rgba(255,255,255,0.04);
+    overflow: hidden;
+    position: relative;
+  }
+  .phone-header {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding: 22px 24px;
+    background: #0f172a;
+    border-bottom: 1px solid rgba(255,255,255,0.04);
+  }
+  .shield {
+    width: 40px;
+    height: 40px;
+    background: #10b981;
+    border-radius: 12px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    box-shadow: 0 8px 24px rgba(16, 185, 129, 0.35);
+  }
+  .shield svg { width: 20px; height: 20px; fill: #ffffff; }
+  .phone-title {
+    font-size: 18px;
+    font-weight: 700;
+    letter-spacing: -0.01em;
+  }
+  .phone-sub {
+    font-size: 12px;
+    color: #94a3b8;
+    margin-top: 2px;
+  }
+  .tabs {
+    display: flex;
+    gap: 6px;
+    padding: 18px 24px;
+  }
+  .tab {
+    flex: 1;
+    padding: 10px 14px;
+    border-radius: 10px;
+    background: rgba(30, 41, 59, 0.4);
+    border: 1px solid rgba(255,255,255,0.03);
+    color: #94a3b8;
+    font-size: 14px;
+    font-weight: 600;
+    text-align: center;
+  }
+  .tab.active {
+    background: rgba(16, 185, 129, 0.12);
+    color: #6ee7b7;
+    border-color: rgba(16, 185, 129, 0.35);
+  }
+  .content { padding: 24px; }
+  .settings-card {
+    background: #0f172a;
+    border: 1px solid rgba(255,255,255,0.06);
+    border-radius: 16px;
+    padding: 24px;
+    margin-bottom: 20px;
+  }
+  .settings-title {
+    font-size: 16px;
+    font-weight: 700;
+    color: #f8fafc;
+    margin-bottom: 20px;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+  }
+  .settings-title .icon {
+    width: 20px;
+    height: 20px;
+    border-radius: 6px;
+    background: rgba(16, 185, 129, 0.15);
+    border: 1px solid rgba(16, 185, 129, 0.3);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
+  }
+  .settings-title .icon svg { width: 12px; height: 12px; fill: #10b981; }
+  .setting-row {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 14px 0;
+    border-bottom: 1px solid rgba(255,255,255,0.03);
+  }
+  .setting-row:last-child { border-bottom: none; }
+  .setting-label {
+    font-size: 14px;
+    font-weight: 600;
+    color: #e2e8f0;
+  }
+  .setting-desc {
+    font-size: 12px;
+    color: #94a3b8;
+    margin-top: 3px;
+    line-height: 1.4;
+  }
+  .toggle {
+    position: relative;
+    width: 48px;
+    height: 26px;
+    background: #334155;
+    border-radius: 999px;
+    cursor: pointer;
+    transition: background 0.2s;
+  }
+  .toggle.on { background: #10b981; }
+  .toggle::after {
+    content: "";
+    position: absolute;
+    top: 2px;
+    left: 2px;
+    width: 22px;
+    height: 22px;
+    background: #ffffff;
+    border-radius: 50%;
+    transition: transform 0.2s;
+  }
+  .toggle.on::after { transform: translateX(22px); }
+  .select-group {
+    display: flex;
+    gap: 8px;
+    border: 1px solid rgba(255,255,255,0.1);
+    border-radius: 10px;
+    background: #020617;
+    padding: 4px;
+  }
+  .select-btn {
+    flex: 1;
+    padding: 8px 12px;
+    border-radius: 8px;
+    font-size: 13px;
+    font-weight: 600;
+    color: #94a3b8;
+    background: transparent;
+    border: none;
+    cursor: pointer;
+    transition: all 0.2s;
+  }
+  .select-btn.active {
+    background: #10b981;
+    color: #ffffff;
+    box-shadow: 0 4px 12px rgba(16, 185, 129, 0.35);
+  }
+  .reset-btn {
+    background: transparent;
+    border: none;
+    color: #ef4444;
+    font-size: 13px;
+    font-weight: 700;
+    padding: 8px 16px;
+    border-radius: 8px;
+    cursor: pointer;
+    transition: background 0.2s;
+  }
+  .reset-btn:hover { background: rgba(239, 68, 68, 0.1); }
+  .info-panel {
+    margin-top: 24px;
+    padding: 16px;
+    background: rgba(16, 185, 129, 0.05);
+    border: 1px solid rgba(16, 185, 129, 0.15);
+    border-radius: 12px;
+  }
+  .info-title {
+    font-size: 13px;
+    font-weight: 700;
+    color: #6ee7b7;
+    margin-bottom: 8px;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+  .info-title .dot {
+    width: 8px;
+    height: 8px;
+    background: #10b981;
+    border-radius: 50%;
+  }
+  .info-text {
+    font-size: 13px;
+    color: #94a3b8;
+    line-height: 1.55;
+  }
+  .footer-note {
+    font-size: 11px;
+    color: #64748b;
+    margin-top: 6px;
+    text-align: center;
+    padding: 0 24px;
+    line-height: 1.4;
+  }
+</style>
+</head>
+<body>
+  <div class="scene">
+    <div class="copy">
+      <div class="badge">Privacy First</div>
+      <h1>Privacy by architecture,<br>not by promise.</h1>
+      <p class="sub">Scan history and settings stay on your device only. Nothing leaves your browser unless you explicitly enable AI analysis.</p>
+      <div class="feature">
+        <div class="dot"></div>
+        <p>Passwords, OTPs, card numbers, CVVs — structurally unrepresentable, never collected.</p>
+      </div>
+      <div class="feature">
+        <div class="dot"></div>
+        <p>No analytics, no tracking, no ads. Ever.</p>
+      </div>
+      <div class="feature">
+        <div class="dot"></div>
+        <p>The backend never logs request bodies; secrets are redacted from logs.</p>
+      </div>
+    </div>
+    <div class="phone">
+      <div class="phone-header">
+        <div class="shield">
+          <svg viewBox="0 0 24 24"><path d="M12 2L2 7l10 5 10-5-10-5zM2 17l10 5 10-5M2 12l10 5 10-5"/></svg>
+        </div>
+        <div>
+          <div class="phone-title">ScamShield</div>
+          <div class="phone-sub">PHISHING PROTECTION</div>
+        </div>
+      </div>
+      <div class="tabs">
+        <div class="tab">Scan</div>
+        <div class="tab">History</div>
+        <div class="tab active">Settings</div>
+      </div>
+      <div class="content">
+        <div class="settings-card">
+          <div class="settings-title">
+            <div class="icon">
+              <svg viewBox="0 0 24 24"><path d="M12 2L2 7l10 5 10-5-10-5zM2 17l10 5 10-5M2 12l10 5 10-5"/></svg>
+            </div>
+            Automatic Scanning
+          </div>
+          <div class="setting-row">
+            <div>
+              <div class="setting-label">Auto-scan pages on load</div>
+              <div class="setting-desc">Scans every page you visit automatically in the background.</div>
+            </div>
+            <div class="toggle on"></div>
+          </div>
+          <div class="setting-row">
+            <div>
+              <div class="setting-label">Redirect-chain tracking</div>
+              <div class="setting-desc">Optional permission to measure redirect hops for deeper analysis.</div>
+            </div>
+            <div class="toggle"></div>
+          </div>
+        </div>
+        <div class="settings-card">
+          <div class="settings-title">
+            <div class="icon">
+              <svg viewBox="0 0 24 24"><path d="M1 9l2 2 4-4m6 2a9 9 0 1 1-18 0 9 9 0 0 1 18 0z"/></svg>
+            </div>
+            Theme
+          </div>
+          <div class="select-group">
+            <button class="select-btn">Light</button>
+            <button class="select-btn">Dark</button>
+            <button class="select-btn active">System</button>
+          </div>
+        </div>
+        <div class="settings-card">
+          <div class="setting-row">
+            <div>
+              <div class="setting-label">Clear history</div>
+              <div class="setting-desc">Remove all local scan history (50-entry cap).</div>
+            </div>
+            <button class="reset-btn">Reset settings</button>
+          </div>
+        </div>
+        <div class="info-panel">
+          <div class="info-title">
+            <div class="dot"></div>
+            What ScamShield sees
+          </div>
+          <div class="info-text">
+            Only minimal sanitized signals: URL structure flags, aggregate page-signal counts, and redirect metadata. Never passwords, cookies, tokens, payment data, or full page contents.
+          </div>
+        </div>
+      </div>
+      <div class="footer-note">ScamShield provides probabilistic risk indicators, not guarantees.</div>
+    </div>
+  </div>
+</body>
+</html>

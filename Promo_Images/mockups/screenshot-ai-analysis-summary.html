@@ -1,0 +1,369 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>ScamShield — AI Analysis Summary</title>
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+    background: radial-gradient(circle at 15% 20%, rgba(16, 185, 129, 0.12) 0%, transparent 40%),
+                radial-gradient(circle at 85% 80%, rgba(56, 189, 248, 0.08) 0%, transparent 40%),
+                linear-gradient(135deg, #0f172a 0%, #020617 100%);
+    color: #f8fafc;
+    min-height: 100vh;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 40px;
+  }
+  .scene {
+    display: flex;
+    gap: 48px;
+    align-items: center;
+    max-width: 1280px;
+  }
+  .copy {
+    flex: 1;
+    max-width: 560px;
+  }
+  .badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    background: rgba(16, 185, 129, 0.14);
+    border: 1px solid rgba(16, 185, 129, 0.35);
+    color: #6ee7b7;
+    font-size: 13px;
+    font-weight: 600;
+    padding: 7px 16px;
+    border-radius: 999px;
+    margin-bottom: 24px;
+    letter-spacing: 0.02em;
+    text-transform: uppercase;
+  }
+  h1 {
+    font-size: 52px;
+    line-height: 1.12;
+    font-weight: 800;
+    margin-bottom: 16px;
+    letter-spacing: -0.02em;
+    background: linear-gradient(to right, #ffffff, #cbd5e1);
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+  }
+  p.sub {
+    font-size: 19px;
+    line-height: 1.55;
+    color: #94a3b8;
+    margin-bottom: 32px;
+  }
+  .feature {
+    display: flex;
+    align-items: flex-start;
+    gap: 14px;
+    margin-bottom: 18px;
+  }
+  .feature .dot {
+    flex-shrink: 0;
+    width: 10px;
+    height: 10px;
+    background: #10b981;
+    border-radius: 50%;
+    margin-top: 6px;
+    box-shadow: 0 0 0 4px rgba(16, 185, 129, 0.15);
+  }
+  .feature p {
+    font-size: 15px;
+    color: #cbd5e1;
+    line-height: 1.5;
+  }
+  .phone {
+    flex-shrink: 0;
+    width: 430px;
+    height: 760px;
+    background: #020617;
+    border-radius: 44px;
+    border: 1px solid rgba(255,255,255,0.06);
+    box-shadow: 0 40px 120px rgba(0,0,0,0.55), inset 0 1px 0 rgba(255,255,255,0.04);
+    overflow: hidden;
+    position: relative;
+  }
+  .phone-header {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding: 22px 24px;
+    background: #0f172a;
+    border-bottom: 1px solid rgba(255,255,255,0.04);
+  }
+  .shield {
+    width: 40px;
+    height: 40px;
+    background: #10b981;
+    border-radius: 12px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    box-shadow: 0 8px 24px rgba(16, 185, 129, 0.35);
+  }
+  .shield svg { width: 20px; height: 20px; fill: #ffffff; }
+  .phone-title {
+    font-size: 18px;
+    font-weight: 700;
+    letter-spacing: -0.01em;
+  }
+  .phone-sub {
+    font-size: 12px;
+    color: #94a3b8;
+    margin-top: 2px;
+  }
+  .tabs {
+    display: flex;
+    gap: 6px;
+    padding: 18px 24px;
+  }
+  .tab {
+    flex: 1;
+    padding: 10px 14px;
+    border-radius: 10px;
+    background: rgba(30, 41, 59, 0.4);
+    border: 1px solid rgba(255,255,255,0.03);
+    color: #94a3b8;
+    font-size: 14px;
+    font-weight: 600;
+    text-align: center;
+  }
+  .tab.active {
+    background: rgba(16, 185, 129, 0.12);
+    color: #6ee7b7;
+    border-color: rgba(16, 185, 129, 0.35);
+  }
+  .content { padding: 24px; }
+  .verdict-card {
+    background: #0f172a;
+    border: 1px solid rgba(255,255,255,0.06);
+    border-radius: 16px;
+    padding: 24px;
+    margin-bottom: 20px;
+    position: relative;
+    overflow: hidden;
+  }
+  .verdict-card::before {
+    content: "";
+    position: absolute;
+    top: 0; left: 0; right: 0; height: 4px;
+    background: linear-gradient(to right, #10b981, #34d399);
+  }
+  .verdict-row {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-bottom: 16px;
+  }
+  .verdict-label {
+    font-size: 14px;
+    font-weight: 700;
+    color: #f8fafc;
+  }
+  .score-badge {
+    padding: 6px 14px;
+    border-radius: 999px;
+    font-size: 13px;
+    font-weight: 800;
+    color: #ffffff;
+    background: rgba(16, 185, 129, 0.15);
+    border: 1px solid rgba(16, 185, 129, 0.35);
+  }
+  .confidence-row {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    margin-bottom: 20px;
+    padding-top: 12px;
+    border-top: 1px solid rgba(255,255,255,0.05);
+  }
+  .confidence-label {
+    font-size: 12px;
+    color: #94a3b8;
+    font-weight: 600;
+  }
+  .confidence-value {
+    font-size: 13px;
+    font-weight: 700;
+    color: #cbd5e1;
+  }
+  .ai-card {
+    background: #0f172a;
+    border: 1px solid rgba(255,255,255,0.06);
+    border-radius: 16px;
+    padding: 24px;
+    margin-bottom: 20px;
+  }
+  .ai-header {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    margin-bottom: 18px;
+  }
+  .ai-icon {
+    width: 28px;
+    height: 28px;
+    border-radius: 8px;
+    background: linear-gradient(135deg, #6366f1, #a855f7);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    box-shadow: 0 8px 20px rgba(99, 102, 241, 0.4);
+  }
+  .ai-icon svg { width: 16px; height: 16px; fill: #ffffff; }
+  .ai-title {
+    font-size: 17px;
+    font-weight: 700;
+    color: #f8fafc;
+  }
+  .ai-desc {
+    font-size: 14px;
+    color: #94a3b8;
+    margin-bottom: 16px;
+    line-height: 1.55;
+  }
+  .indicator {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding: 12px 0;
+    border-bottom: 1px solid rgba(255,255,255,0.03);
+  }
+  .indicator:last-child { border-bottom: none; }
+  .indicator-tag {
+    font-size: 11px;
+    font-weight: 800;
+    color: #94a3b8;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    flex-shrink: 0;
+  }
+  .indicator-title {
+    font-size: 14px;
+    font-weight: 700;
+    color: #e2e8f0;
+    flex: 1;
+    margin-bottom: 2px;
+  }
+  .indicator-points {
+    font-size: 12px;
+    color: #64748b;
+    margin-left: auto;
+    font-weight: 600;
+  }
+  .indicator-desc {
+    font-size: 12px;
+    color: #94a3b8;
+    margin-left: 46px;
+    line-height: 1.4;
+  }
+  .footer-note {
+    font-size: 11px;
+    color: #64748b;
+    margin-top: 6px;
+    text-align: center;
+    padding: 0 24px;
+    line-height: 1.4;
+  }
+</style>
+</head>
+<body>
+  <div class="scene">
+    <div class="copy">
+      <div class="badge">AI Second Opinion</div>
+      <h1>AI analysis only when<br>it actually helps.</h1>
+      <p class="sub">Groq reviews sanitized security signals only when local evidence is ambiguous — never overrides a confirmed threat match.</p>
+      <div class="feature">
+        <div class="dot"></div>
+        <p>AI runs automatically — no toggle to flip, no settings to configure.</p>
+      </div>
+      <div class="feature">
+        <div class="dot"></div>
+        <p>Model output capped at low confidence — never treated as proof of safety.</p>
+      </div>
+      <div class="feature">
+        <div class="dot"></div>
+        <p>Only minimal sanitized signals reach your backend; API key stays server-side.</p>
+      </div>
+    </div>
+    <div class="phone">
+      <div class="phone-header">
+        <div class="shield">
+          <svg viewBox="0 0 24 24"><path d="M12 2L2 7l10 5 10-5-10-5zM2 17l10 5 10-5M2 12l10 5 10-5"/></svg>
+        </div>
+        <div>
+          <div class="phone-title">ScamShield</div>
+          <div class="phone-sub">PHISHING PROTECTION</div>
+        </div>
+      </div>
+      <div class="tabs">
+        <div class="tab">Scan</div>
+        <div class="tab active">History</div>
+        <div class="tab">Settings</div>
+      </div>
+      <div class="content">
+        <div class="verdict-card">
+          <div class="verdict-row">
+            <span class="verdict-label">Verdict</span>
+            <span class="score-badge">Protected · Score 100</span>
+          </div>
+          <div class="confidence-row">
+            <span class="confidence-label">AI Confidence</span>
+            <span class="confidence-value">85% · ai-enhanced</span>
+          </div>
+          <div class="ai-desc" style="margin-bottom: 18px;">The page hosts a login form with password fields while served over plain HTTP, making credential capture trivial. Combined with urgency language, fake security warnings, and a script from an unknown origin, the site exhibits multiple high-risk social-engineering indicators.</div>
+          <div class="indicator">
+            <span class="indicator-tag">Rule</span>
+            <div>
+              <div class="indicator-title">Login form over HTTP</div>
+              <div class="indicator-desc">Password field present on a non-HTTPS page, exposing credentials to interception.</div>
+            </div>
+            <span class="indicator-points">−3</span>
+          </div>
+          <div class="indicator">
+            <span class="indicator-tag">Rule</span>
+            <div>
+              <div class="indicator-title">Urgency language</div>
+              <div class="indicator-desc">Multiple urgency phrases detected, a common social-engineering tactic.</div>
+            </div>
+            <span class="indicator-points">−2</span>
+          </div>
+          <div class="indicator">
+            <span class="indicator-tag">Rule</span>
+            <div>
+              <div class="indicator-title">Fake security warnings</div>
+              <div class="indicator-desc">Presence of fabricated security warning patterns intended to coerce user action.</div>
+            </div>
+            <span class="indicator-points">−2</span>
+          </div>
+        </div>
+        <div class="ai-card">
+          <div class="ai-header">
+            <div class="ai-icon">
+              <svg viewBox="0 0 24 24"><path d="M12 2L2 7l10 5 10-5-10-5zM2 17l10 5 10-5"/></svg>
+            </div>
+            <div class="ai-title">AI Analysis</div>
+          </div>
+          <div class="ai-desc">No brand impersonation or payment collection is observed, but the credential-phishing risk is severe. Recommendation: do not enter passwords on this page.</div>
+          <div class="indicator">
+            <span class="indicator-tag">AI</span>
+            <div>
+              <div class="indicator-title">External script from unknown origin</div>
+              <div class="indicator-desc">Script loaded from a non-standard, likely malicious origin: liebcddmkniihnedobmlmilhodjdkmb.</div>
+            </div>
+            <span class="indicator-points">−1</span>
+          </div>
+        </div>
+      </div>
+      <div class="footer-note">ScamShield provides probabilistic risk indicators, not guarantees.</div>
+    </div>
+  </div>
+</body>
+</html>

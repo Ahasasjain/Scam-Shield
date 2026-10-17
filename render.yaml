@@ -1,0 +1,40 @@
+# Render Blueprint — https://render.com/docs/blueprint-spec
+#
+# In the Render dashboard: New → Blueprint → pick this repo → Apply.
+# Render builds server/Dockerfile from the repo root (required: the backend
+# depends on the @scamshield/shared workspace package via `workspace:*`, which
+# only resolves from the root), then prompts for the `sync: false` secrets.
+#
+# autoDeployTrigger is 'off' on purpose: deploys are triggered by the GitHub
+# Actions workflow (deploy-server.yml) via a Deploy Hook, so nothing ships until
+# lint, typecheck and tests pass. Add the hook URL as the RENDER_DEPLOY_HOOK
+# secret. (Set it to `commit` if you would rather let Render deploy every push.)
+
+services:
+  - type: web
+    name: scamshield-api
+    runtime: docker
+    plan: free
+    region: oregon
+    dockerfilePath: ./server/Dockerfile
+    dockerContext: .
+    healthCheckPath: /api/health
+    autoDeployTrigger: "off"
+    envVars:
+      - key: NODE_ENV
+        value: production
+      # Render injects PORT itself — never set it here.
+      - key: GROQ_API_KEY
+        sync: false
+      - key: GROQ_MODEL
+        value: openai/gpt-oss-120b
+      - key: GOOGLE_SAFEBROWSING_API_KEY
+        sync: false
+      - key: ALLOWED_EXTENSION_ORIGINS
+        sync: false
+      - key: THREAT_FEED_URL
+        value: https://openphish.com/feed.txt
+      - key: THREAT_RATE_LIMIT_MAX
+        value: "600"
+      - key: LOG_LEVEL
+        value: info

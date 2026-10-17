@@ -1,0 +1,64 @@
+# ScamShield API — self-hosting with Docker.
+#
+#   docker compose up -d --build            # build locally, API on :8787
+#   docker compose --profile edge up -d     # + Caddy with automatic HTTPS
+#
+# Configuration lives in server/.env (copy it from server/.env.example).
+# The optional `edge` profile also reads DOMAIN from the root .env file.
+#
+# On a server that pulls the image built by GitHub Actions, set
+# SCAMSHIELD_API_IMAGE to the GHCR ref so compose pulls instead of builds:
+#   SCAMSHIELD_API_IMAGE=ghcr.io/<owner>/<repo>/scamshield-api:latest docker compose up -d
+
+name: scamshield
+
+services:
+  api:
+    image: ${SCAMSHIELD_API_IMAGE:-scamshield-api:local}
+    build:
+      context: .
+      dockerfile: server/Dockerfile
+    restart: unless-stopped
+    env_file:
+      - server/.env
+    environment:
+      # Containers are production, even on a laptop; .env values still win
+      # for PORT and friends because dotenv never overrides the environment.
+      NODE_ENV: production
+    ports:
+      - "${API_PORT:-8787}:8787"
+    healthcheck:
+      # /api/health is registered before the origin check and rate limiters,
+      # so an unauthenticated probe like this one always works.
+      test: ["CMD", "wget", "-qO-", "http://127.0.0.1:8787/api/health"]
+      interval: 30s
+      timeout: 5s
+      start_period: 20s
+      retries: 3
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+  # Optional TLS terminator. Enable with --profile edge and set
+  # DOMAIN=api.example.com in the root .env (an A record must point here).
+  caddy:
+    image: caddy:2-alpine
+    profiles: ["edge"]
+    restart: unless-stopped
+    depends_on:
+      - api
+    environment:
+      DOMAIN: ${DOMAIN:?set DOMAIN in the root .env file to use the edge profile}
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy_data:/data
+      - caddy_config:/config
+
+volumes:
+  caddy_data:
+  caddy_config:

@@ -34,6 +34,8 @@ COPY --from=build /app/server/dist ./dist
 RUN addgroup -S app && adduser -S app -G app && chown -R app:app /app
 USER app
 EXPOSE 8787
+# Shell form on purpose: ${PORT} expands at runtime, so the probe follows the
+# port the platform injects (Render/Railway set PORT; local runs default 8787).
 HEALTHCHECK --interval=30s --timeout=5s --start-period=20s --retries=3 \
-  CMD wget -qO- http://127.0.0.1:8787/api/health | grep -q '"ok":true'
+  CMD wget -qO- "http://127.0.0.1:${PORT:-8787}/api/health" | grep -q '"ok":true'
 CMD ["node", "dist/index.js"]

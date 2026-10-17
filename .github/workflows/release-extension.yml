@@ -1,0 +1,97 @@
+name: Release extension
+
+# The extension is the "frontend" — it is not served by a container, so
+# "deploying" it means building, packaging and (optionally) publishing it.
+#
+#   * tag push  -> zip + GitHub release asset, and a Chrome Web Store upload
+#                  when the CWS_* secrets are configured
+#   * manual    -> same, with an optional api_url override
+#
+# The backend URL is baked into the bundle at build time (there is no runtime
+# setting), which is why the API URL must exist before this runs.
+on:
+  push:
+    tags: ["v*"]
+  workflow_dispatch:
+    inputs:
+      api_url:
+        description: "Backend URL to bake in (overrides the SCAMSHIELD_API_URL repository variable)"
+        required: false
+        type: string
+
+concurrency:
+  group: release-extension-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  package:
+    name: Build, test, package, publish
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write # needed by softprops/action-gh-release on tag pushes
+    env:
+      API_URL: ${{ inputs.api_url || vars.SCAMSHIELD_API_URL }}
+      CWS_EXTENSION_ID: ${{ secrets.CWS_EXTENSION_ID }}
+      CWS_PUBLISHER_ID: ${{ secrets.CWS_PUBLISHER_ID }}
+      CWS_CLIENT_ID: ${{ secrets.CWS_CLIENT_ID }}
+      CWS_CLIENT_SECRET: ${{ secrets.CWS_CLIENT_SECRET }}
+      CWS_REFRESH_TOKEN: ${{ secrets.CWS_REFRESH_TOKEN }}
+    steps:
+      - uses: actions/checkout@v7
+      - name: Require a backend URL
+        run: |
+          if [ -z "$API_URL" ]; then
+            echo "::error::Set the SCAMSHIELD_API_URL repository variable (Settings → Secrets and variables → Actions → Variables) or pass the api_url input."
+            exit 1
+          fi
+      - uses: pnpm/action-setup@v6
+      - uses: actions/setup-node@v7
+        with:
+          node-version: "20"
+          cache: pnpm
+      - name: Install
+        run: pnpm install --frozen-lockfile
+      - name: Build with the backend URL baked in
+        run: pnpm --filter @scamshield/extension build
+        env:
+          SCAMSHIELD_API_URL: ${{ env.API_URL }}
+      # The baked value lives in the shared storage chunk, not background.js —
+      # search the whole dist tree instead of one filename.
+      - name: Verify the URL is baked in
+        run: |
+          grep -rqF "$API_URL" extension/dist
+          echo "OK: $API_URL is present in extension/dist"
+      - name: Test
+        run: pnpm --filter @scamshield/extension test
+      - name: Zip (manifest.json at the archive root, as the Web Store expects)
+        run: |
+          cd extension/dist
+          zip -r "$GITHUB_WORKSPACE/scamshield-extension.zip" .
+          cd "$GITHUB_WORKSPACE"
+          unzip -l scamshield-extension.zip | head -20
+      - uses: actions/upload-artifact@v7
+        with:
+          name: scamshield-extension
+          path: scamshield-extension.zip
+          if-no-files-found: error
+          retention-days: 90
+      - name: Attach to GitHub release
+        if: startsWith(github.ref, 'refs/tags/')
+        uses: softprops/action-gh-release@v3
+        with:
+          files: scamshield-extension.zip
+          generate_release_notes: true
+      - name: Publish to Chrome Web Store
+        if: env.CWS_REFRESH_TOKEN != ''
+        uses: mnao305/chrome-extension-upload@v7.0.0
+        with:
+          file-path: scamshield-extension.zip
+          extension-id: ${{ secrets.CWS_EXTENSION_ID }}
+          publisher-id: ${{ secrets.CWS_PUBLISHER_ID }}
+          client-id: ${{ secrets.CWS_CLIENT_ID }}
+          client-secret: ${{ secrets.CWS_CLIENT_SECRET }}
+          refresh-token: ${{ secrets.CWS_REFRESH_TOKEN }}
+          publish: true
+      - name: Store publish not configured (skip)
+        if: env.CWS_REFRESH_TOKEN == ''
+        run: echo "::notice::CWS_* secrets are not set — the zip is available as a workflow artifact / release asset only. See docs/DEPLOYMENT.md (Part 2)."

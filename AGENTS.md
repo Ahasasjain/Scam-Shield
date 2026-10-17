@@ -7,7 +7,7 @@ Chrome MV3 anti-phishing extension (`extension/`) + optional Node/Express AI bac
 
 ```bash
 pnpm install                 # pnpm@9.12.0 via corepack; .npmrc has engine-strict + save-exact
-pnpm -r test                 # 9 extension files / 95 tests (jsdom, ~60s) + 3 server files / 13 tests
+pnpm -r test                 # 17 extension files / 410 tests (jsdom, ~70s) + 5 server files / 43 tests
 pnpm -r lint                 # eslint --max-warnings 0
 pnpm -r typecheck            # tsc --noEmit  (all 3 packages pass)
 pnpm --filter @scamshield/extension dev    # vite build --watch (NOT a dev server)
@@ -286,6 +286,27 @@ so cached scans that skipped injection still warn. Surprising when testing.
   packaging, troubleshooting). `docs/rule-engine.md` documents the rule categories, points
   model, and anti-false-positive design. `docs/STORE_LISTING.md` is the copy-paste
   source for the Chrome Web Store listing (assets in `Promo_Images/`).
+
+## CI/CD and containers
+
+`.github/workflows/` holds three workflows: `ci.yml` (PRs: build → lint → typecheck
+→ test, plus a build-only `docker build`), `deploy-server.yml` (push to main: same
+verify, then push `ghcr.io/<owner>/<repo>/scamshield-api` to GHCR and deploy to
+Render via `RENDER_DEPLOY_HOOK` and/or EC2 via `EC2_HOST`/`EC2_USER`/`EC2_SSH_KEY`;
+absent secrets print a notice and skip — they are never a failure), and
+`release-extension.yml` (tag `v*`: build with `SCAMSHIELD_API_URL` baked in, test,
+zip, GitHub release, optional Chrome Web Store upload via `CWS_*` secrets).
+
+- The baked API URL lands in `assets/storage-*.js`, **not** `background.js`.
+  Verify a production build with `grep -rqF "$URL" extension/dist`.
+- `docker-compose.yml` + `Caddyfile` are the self-hosting path (`--profile edge`
+  adds automatic HTTPS); `render.yaml` is the Render Blueprint (Dockerfile
+  `./server/Dockerfile`, context `.`, `autoDeployTrigger: "off"`).
+- `deploy/ec2-user-data.sh` is pasted into EC2 "User data" — it must keep LF
+  endings (`.gitattributes` enforces that).
+- `refreshFeed()` uses `||`, not `??`, for `THREAT_FEED_URL`: the tracked
+  `server/.env.example` ships it empty, and `""` must mean "use the default feed",
+  not `fetch("")`.
 
 ## Environment notes
 
