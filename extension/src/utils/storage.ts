@@ -115,13 +115,22 @@ export async function clearHistory(): Promise<void> {
   await storage().set({ [HISTORY_KEY]: [] });
 }
 
-/** Backend base URL for AI/threat analysis. Baked at build time; the
- * stored value (if any) overrides it for development overrides only. */
+/**
+ * Backend base URL for AI/threat analysis.
+ *
+ * The build-time URL always wins so an old `aiBaseUrl` value left in
+ * chrome.storage by a previous build cannot silently point the extension back
+ * at localhost. The stored value is only a fallback for builds that were made
+ * without a baked URL at all.
+ */
 export async function getAiBaseUrl(): Promise<string> {
+  const baked =
+    typeof __SCAMSHIELD_API_URL__ === "string" ? __SCAMSHIELD_API_URL__ : "";
+  if (baked !== "") return baked;
+
   const result = await storage().get(AI_BASE_URL_KEY);
   const value = result[AI_BASE_URL_KEY];
-  if (typeof value === "string" && value !== "") return value;
-  return typeof __SCAMSHIELD_API_URL__ === "string" ? __SCAMSHIELD_API_URL__ : "";
+  return typeof value === "string" ? value : "";
 }
 
 export async function setAiBaseUrl(url: string): Promise<void> {

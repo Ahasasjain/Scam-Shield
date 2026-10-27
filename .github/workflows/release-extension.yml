@@ -30,7 +30,9 @@ jobs:
     permissions:
       contents: write # needed by softprops/action-gh-release on tag pushes
     env:
-      API_URL: ${{ inputs.api_url || vars.SCAMSHIELD_API_URL }}
+      # Fallback matches the production default in extension/vite.config.ts.
+      # Prefer the repository variable so forks can point at their own backend.
+      API_URL: ${{ inputs.api_url || vars.SCAMSHIELD_API_URL || 'https://scamshield-api-l17s.onrender.com' }}
       CWS_EXTENSION_ID: ${{ secrets.CWS_EXTENSION_ID }}
       CWS_PUBLISHER_ID: ${{ secrets.CWS_PUBLISHER_ID }}
       CWS_CLIENT_ID: ${{ secrets.CWS_CLIENT_ID }}

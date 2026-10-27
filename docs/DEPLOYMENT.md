@@ -201,7 +201,7 @@ Build-time variables (extension, via Vite `define` — not runtime settings):
 
 | Variable | Description | Default |
 | --- | --- | --- |
-| `SCAMSHIELD_API_URL` | Backend URL baked into the bundle | `http://localhost:8787` |
+| `SCAMSHIELD_API_URL` | Backend URL baked into the bundle | production: `https://scamshield-api-l17s.onrender.com`; dev watch: `http://localhost:8787` |
 | `SCAMSHIELD_AI_ALWAYS_RUN` | Force an AI call on every scan (dev/test only — costs provider calls) | `false` |
 
 **Never put an API key anywhere in `extension/`.** The key lives exclusively in the server's environment.

@@ -119,8 +119,10 @@ pnpm dev:server     # http://localhost:8787
 ```
 
 No settings to change in the extension: the backend URL is baked in at build
-time (`SCAMSHIELD_API_URL`, default `http://localhost:8787`), and AI runs
-automatically only when local evidence warrants it — there is no AI toggle.
+time (`SCAMSHIELD_API_URL`; production builds default to
+`https://scamshield-api-l17s.onrender.com`, development builds to
+`http://localhost:8787`), and AI runs automatically only when local evidence
+warrants it — there is no AI toggle.
 For a production build pointing at your deployed backend, see
 [docs/DEPLOYMENT.md](docs/DEPLOYMENT.md).
 
@@ -148,7 +150,7 @@ Build-time (extension, via `vite.config.ts` `define` — not runtime settings):
 
 | Variable               | Description                                              | Default                   |
 | ---------------------- | -------------------------------------------------------- | ------------------------- |
-| `SCAMSHIELD_API_URL`   | Backend URL baked into the bundle                        | `http://localhost:8787`   |
+| `SCAMSHIELD_API_URL`   | Backend URL baked into the bundle (production build; dev watch defaults to localhost) | `https://scamshield-api-l17s.onrender.com` |
 | `SCAMSHIELD_AI_ALWAYS_RUN` | Force an AI call on every scan (dev/test only — costs provider calls) | `false` |
 
 **Never put an API key anywhere in `extension/`.** The key lives exclusively in the server's environment.

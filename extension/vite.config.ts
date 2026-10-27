@@ -76,13 +76,17 @@ function wrapContentScriptInIife(): Plugin {
  * - background                   → service worker (ES module)
  * - content                      → on-demand content script (IIFE, no imports)
  */
-export default defineConfig(() => ({
+export default defineConfig(({ mode }) => ({
   plugins: [react(), tailwindcss(), flattenExtensionHtml(), wrapContentScriptInIife()],
   define: {
     // Baked at build time — end users never configure an API endpoint.
-    // Set SCAMSHIELD_API_URL when building for production.
+    // SCAMSHIELD_API_URL always wins. Otherwise production builds use the
+    // deployed Render API and the dev watch build uses the local server.
     __SCAMSHIELD_API_URL__: JSON.stringify(
-      process.env.SCAMSHIELD_API_URL ?? "http://localhost:8787",
+      process.env.SCAMSHIELD_API_URL ??
+        (mode === "development"
+          ? "http://localhost:8787"
+          : "https://scamshield-api-l17s.onrender.com"),
     ),
     __SCAMSHIELD_AI_ALWAYS_RUN__: JSON.stringify(
       process.env.SCAMSHIELD_AI_ALWAYS_RUN === "true",

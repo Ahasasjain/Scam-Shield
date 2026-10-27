@@ -212,9 +212,12 @@ so cached scans that skipped injection still warn. Surprising when testing.
 
 ## Extension build quirks
 
-- Backend URL is **baked in at build time**: `SCAMSHIELD_API_URL` (default
-  `http://localhost:8787`) via Vite `define` → `__SCAMSHIELD_API_URL__`. There is no UI to
-  set it anymore; `storage.setAiBaseUrl()` is dead code. `SCAMSHIELD_AI_ALWAYS_RUN=true`
+- Backend URL is **baked in at build time**: `SCAMSHIELD_API_URL` via Vite `define` →
+  `__SCAMSHIELD_API_URL__`. Production builds default to
+  `https://scamshield-api-l17s.onrender.com`; `--mode development` builds default to
+  `http://localhost:8787`. There is no UI to set it anymore; `storage.setAiBaseUrl()` is
+  dead code, and the baked URL deliberately wins over any stale stored value.
+  `SCAMSHIELD_AI_ALWAYS_RUN=true`
   forces an AI call on every scan (dev/test only, costs provider calls).
   These `define`s exist only in `vite.config.ts`, not `vitest.config.ts`.
 - The `flattenExtensionHtml` plugin moves `src/popup/index.html` → `dist/popup.html` and
