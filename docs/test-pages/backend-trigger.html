@@ -1,0 +1,83 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>ScamShield backend trigger fixture</title>
+    <style>
+      body {
+        max-width: 640px;
+        margin: 3rem auto;
+        padding: 0 1.25rem;
+        font: 16px/1.5 system-ui, sans-serif;
+        color: #18202f;
+      }
+      .alert {
+        border: 2px solid #b42318;
+        background: #fff1f0;
+        padding: 1rem;
+        border-radius: 8px;
+      }
+      form {
+        display: grid;
+        gap: 0.75rem;
+        margin: 1.5rem 0;
+        padding: 1rem;
+        border: 1px solid #d0d5dd;
+        border-radius: 8px;
+      }
+      label {
+        display: grid;
+        gap: 0.25rem;
+      }
+      input,
+      button {
+        padding: 0.55rem;
+        font: inherit;
+      }
+      button {
+        background: #18202f;
+        color: #fff;
+        border: 0;
+        border-radius: 6px;
+        cursor: pointer;
+      }
+      .note {
+        color: #667085;
+        font-size: 0.9rem;
+      }
+    </style>
+  </head>
+  <body>
+    <!--
+      Local test fixture only. It contains no real credentials and posts
+      nowhere. The text deliberately matches ScamShield's urgency heuristics;
+      the password field over HTTP adds transport evidence. This should trigger
+      page-urgency-language, which is one of the AI_TRIGGER_IDS, so a scan
+      calls both /api/threat-lookup and /api/analyze.
+    -->
+    <div class="alert">
+      <h1>Security alert: your account has been locked</h1>
+      <p>
+        <strong>Immediate action required.</strong> Act now to restore access.
+        This is urgent — verify your account immediately.
+      </p>
+    </div>
+
+    <form action="/login" method="post" onsubmit="event.preventDefault();">
+      <label>
+        Email
+        <input type="email" name="email" autocomplete="username" />
+      </label>
+      <label>
+        Password
+        <input type="password" name="password" autocomplete="current-password" />
+      </label>
+      <button type="submit">Sign in</button>
+    </form>
+
+    <p class="note">
+      ScamShield test fixture — no data is collected, stored, or submitted.
+    </p>
+  </body>
+</html>
