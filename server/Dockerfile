@@ -21,14 +21,23 @@ RUN pnpm --filter @scamshield/server build
 FROM node:20-alpine AS runtime
 WORKDIR /app
 ENV NODE_ENV=production
-# The bundle inlines @scamshield/shared, zod and dotenv; only these externals
-# are needed at runtime (must match `external` in server/tsup.config.ts).
-COPY server/package.json ./
-RUN npm i --omit=dev --no-audit --no-fund \
-  express@4 \
-  helmet \
-  express-rate-limit \
-  pino
+# The bundle inlines @scamshield/shared. Everything else imported by the built
+# dist/index.js is external: the four packages below plus dotenv and zod.
+# Keep this list in sync with `external` in server/tsup.config.ts and the
+# imports in dist/index.js.
+#
+# Do NOT copy server/package.json into this stage: it declares
+# "@scamshield/shared": "workspace:*", which npm cannot resolve outside the
+# pnpm workspace (EUNSUPPORTEDPROTOCOL). A minimal manifest is enough, and the
+# direct deps are pinned to the versions resolved in pnpm-lock.yaml.
+RUN echo '{"name":"scamshield-api","private":true,"type":"module"}' > package.json \
+  && npm i --omit=dev --no-audit --no-fund \
+    dotenv@16.6.1 \
+    express@4.22.2 \
+    express-rate-limit@7.5.1 \
+    helmet@7.2.0 \
+    pino@9.14.0 \
+    zod@3.25.76
 COPY --from=build /app/server/dist ./dist
 # Drop privileges: nothing in this service needs root.
 RUN addgroup -S app && adduser -S app -G app && chown -R app:app /app
