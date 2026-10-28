@@ -58,9 +58,9 @@ HOW IT WORKS
   forms, redirects, and domain age — always on, fully offline-capable.
 • Threat intelligence: Google Safe Browsing, the OpenPhish phishing feed,
   and a curated lookalike-domain list.
-• AI second opinion: when local evidence is genuinely ambiguous, a Groq AI
-  analyst reviews sanitized security signals only. AI can never overrule a
-  confirmed threat match.
+• AI second opinion: when local evidence matches its AI-trigger rules, a
+  Groq AI analyst reviews sanitized security signals only. AI can never
+  overrule a confirmed threat match.
 • Every finding explains WHY it affected the verdict — no black boxes.
 
 AUTOMATIC PROTECTION
@@ -71,8 +71,9 @@ PRIVACY-FIRST — BY ARCHITECTURE, NOT PROMISE
 • Scan history and settings stay on your device only (last 50 scans).
 • Passwords, OTPs, card numbers, cookies, and form contents are structurally
   unrepresentable in what ScamShield collects — never stored, never sent.
-• Only minimal sanitized metadata reaches the ScamShield backend, and only
-  when local evidence justifies it. No analytics. No tracking. No ads.
+• The page URL and domain are sent to the ScamShield backend for threat
+  lookup. When local evidence warrants AI, sanitized metadata is sent to
+  Groq. No analytics. No tracking. No ads.
 
 FREE & OPEN SOURCE
 • Every line of code is public and auditable. No accounts, no paywalls.
@@ -102,32 +103,33 @@ SUPPORT
 
 - **Data collected for the single purpose (scam detection):** the visited
   page's URL/hostname, structural page signals (form types present, wording
-  counts — never field contents), and redirect metadata.
+  counts — never field contents), redirect metadata, and domain-age data.
 - **Never collected, never transmitted:** passwords, OTPs/PINs, card numbers,
   CVVs, UPI identifiers, cookies/session tokens, form field contents of any
   kind, full page text.
 - **Where it goes:** scan history and settings stay in the browser profile
-  only (50-entry cap, user-clearable). Sanitized security metadata is sent to
-  the first-party ScamShield backend solely for threat-intel lookup and
-  ambiguous-case AI enrichment.
-- **Subprocessors (sanitized metadata only):** Groq (AI second opinion),
-  Google Safe Browsing (threat lookup). No data is sold, shared for
-  advertising, or used for tracking.
-- **Retention:** nothing retained server-side; local history is capped and
-  deletable at any time via Clear history.
+  only (50-entry cap, user-clearable). The page URL and domain are sent to the
+  first-party ScamShield backend for threat lookup. When local evidence
+  warrants AI, sanitized metadata is sent to Groq.
+- **Subprocessors:** Google Safe Browsing (page URL for threat lookup), Groq
+  (sanitized metadata for AI), RDAP.org (domain for registration age), and
+  Render (backend hosting).
+- **Retention:** no persistent scan database; short-lived in-memory threat
+  caches only. Local history is capped and deletable at any time.
+- **No sale / no unrelated use:** data is not sold, not used for advertising,
+  and not used for creditworthiness or lending.
 
 ---
 
 ## Privacy policy URL
 
-Host `PRIVACY.md` publicly and paste the URL here (it must stay in sync
-with the disclosure above):
+The policy is hosted publicly at:
 
 ```
-[YOUR-HOSTED-PRIVACY-POLICY-URL]
+https://github.com/Ahasasjain/Scam-Shield/blob/main/PRIVACY.md
 ```
 
-Candidate: `https://github.com/Ahasasjain/Scam-Shield/blob/main/PRIVACY.md`
+Keep it in sync with the disclosure above.
 
 ---
 
@@ -137,10 +139,14 @@ Candidate: `https://github.com/Ahasasjain/Scam-Shield/blob/main/PRIVACY.md`
 
 ---
 
-## Post-publish two-step release (do not skip)
+## Post-publish steps (do not skip)
 
-1. Publish → the Store assigns the permanent extension ID.
-2. Set `ALLOWED_EXTENSION_ORIGINS=chrome-extension://<that-id>` on the
-   backend and redeploy.
-3. Rebuild the extension with `SCAMSHIELD_API_URL` pointing at production,
-   upload the new zip as version 1.0.1.
+1. Create/publish the listing → the Store assigns the permanent extension ID.
+2. Set
+   `ALLOWED_EXTENSION_ORIGINS=chrome-extension://<that-id>,chrome-extension://<unpacked-id>`
+   on the backend and redeploy.
+3. Install the store build and verify `/api/threat-lookup` and `/api/analyze`
+   work without 403/CORS errors.
+
+The backend URL is already baked into the production build; no rebuild is
+needed just because the store assigned a new ID.
